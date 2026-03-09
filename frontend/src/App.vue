@@ -652,11 +652,16 @@ async function toggleScript() {
     // 添加日志
     const logs = accountLogs.value[accountId] || [];
     logs.push(`[${new Date().toLocaleTimeString()}] ${currentStatus ? '脚本已停止' : '脚本已启动'}`);
-    // 如果是启动脚本，添加玄机博客信息到日志
-    if (!currentStatus) {
-      logs.push(`[${new Date().toLocaleTimeString()}] powered by 玄机博客：https://xuanji.hk-gov.com/`);
-    }
     accountLogs.value[accountId] = logs;
+    
+    // 如果是启动脚本，延迟添加玄机博客信息到日志（确保显示在启动日志之后）
+    if (!currentStatus) {
+      setTimeout(() => {
+        const logs = accountLogs.value[accountId] || [];
+        logs.push(`[${new Date().toLocaleTimeString()}] powered by 玄机博客：https://xuanji.hk-gov.com/`);
+        accountLogs.value[accountId] = logs;
+      }, 100);
+    }
 
     // 立即刷新数据
     await refreshAccountData(accountId);

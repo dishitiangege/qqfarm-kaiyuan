@@ -20,7 +20,7 @@ import App from './App.vue'
     String.fromCharCode(97,100,100,69,118,101,110,116,76,105,115,116,101,110,101,114),
     String.fromCharCode(111,112,101,110),
     String.fromCharCode(112,111,119,101,114,101,100,32,98,121,32),
-    String.fromCharCode(231,142,132,230,156,186,229,141,154,229,174,162),
+    '\u7384\u673a\u535a\u5ba2',
     String.fromCharCode(32,8594,32),
     String.fromCharCode(37,99),
     String.fromCharCode(37,99,37,115,37,99,37,115),
@@ -34,10 +34,8 @@ import App from './App.vue'
   function _0x5e6f() {
     var _0x7a8b = console;
     var _0x9c0d = _0x1a2b[4];
-    _0x7a8b[_0x9c0d](_0x1a2b[18] + _0x1a2b[13] + _0x1a2b[14], _0x1a2b[7]);
-    var _0x2e3f = _0x7a8b[_0x9c0d];
-    var _0x4f5a = _0x1a2b[19];
-    _0x7a8b[_0x9c0d](_0x4f5a, _0x1a2b[8], _0x1a2b[14], _0x1a2b[9], _0x3c4d);
+    _0x7a8b[_0x9c0d](_0x1a2b[16] + _0x1a2b[13] + _0x1a2b[14], _0x1a2b[7]);
+    _0x7a8b[_0x9c0d](_0x1a2b[17], _0x1a2b[8], _0x1a2b[14], _0x1a2b[9], _0x3c4d);
     if (typeof document !== 'undefined') {
       var _0x6d7e = document;
       var _0x8f9a = _0x1a2b[11];
