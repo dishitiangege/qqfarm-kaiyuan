@@ -114,6 +114,14 @@ router.put('/accounts/:id/relogin', async (req, res) => {
   } catch (error) {
     console.error(`[API] 更新账号 ${id} 失败:`, error.message);
     console.error(error.stack);
+    // 区分账号不存在和其他错误
+    if (error.message === '账号不存在') {
+      return res.status(404).json({ 
+        error: '账号不存在', 
+        message: '账号数据可能已丢失，请删除此账号后重新添加',
+        accountId: id 
+      });
+    }
     res.status(500).json({ error: error.message, stack: error.stack });
   }
 });

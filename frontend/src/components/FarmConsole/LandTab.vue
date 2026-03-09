@@ -306,6 +306,11 @@
         <!-- 可偷徽章 -->
         <div v-if="land.stealable" class="land-stealable-badge">可偷</div>
 
+        <!-- 合种标识 -->
+        <div v-if="land.plantSize > 1" class="land-combined-badge">
+          合种 {{ land.plantSize }}x{{ land.plantSize }}
+        </div>
+
         <!-- 作物图片 -->
         <div class="land-crop-image-container">
           <img 
@@ -608,6 +613,9 @@ const landData = computed(() => {
       couldUpgrade: land.couldUpgrade ?? false,
       stealable: land.stealable ?? false,
       buff: land.buff,
+      plantSize: land.plantSize ?? 1,  // 合种尺寸：1=1x1, 2=2x2
+      isMasterLand: land.isMasterLand ?? false,  // 是否为主地块
+      isSlaveLand: land.isSlaveLand ?? false,    // 是否为副地块（被占用）
     };
   });
 });
@@ -955,6 +963,20 @@ watch(() => props.account.stats?.exp, () => {
   padding: 2px 6px;
   border-radius: 10px;
   animation: badge-blink 1.5s ease-in-out infinite;
+}
+
+.land-combined-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(236, 72, 153, 0.3);
+  z-index: 5;
 }
 
 @keyframes badge-blink {

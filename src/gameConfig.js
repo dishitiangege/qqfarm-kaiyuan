@@ -220,6 +220,26 @@ function getPlantByFruitId(fruitId) {
     return fruitToPlant.get(fruitId);
 }
 
+/**
+ * 获取植物的尺寸（合种大小）
+ * @param {number} plantId - 植物ID
+ * @returns {number} 尺寸：1=1x1普通作物，2=2x2四格作物
+ */
+function getPlantSize(plantId) {
+    const plant = plantMap.get(plantId);
+    return Math.max(1, Number(plant && plant.size) || 1);
+}
+
+/**
+ * 根据种子ID获取作物尺寸
+ * @param {number} seedId - 种子ID
+ * @returns {number} 尺寸：1=1x1普通作物，2=2x2四格作物
+ */
+function getPlantSizeBySeedId(seedId) {
+    const plant = seedToPlant.get(seedId);
+    return Math.max(1, Number(plant && plant.size) || 1);
+}
+
 // ============ 物品配置相关 ============
 
 /**
@@ -296,6 +316,8 @@ module.exports = {
     getPlantGrowTime,
     getPlantExp,
     formatGrowTime,
+    getPlantSize,
+    getPlantSizeBySeedId,
     // 果实配置
     getFruitName,
     getPlantByFruitId,

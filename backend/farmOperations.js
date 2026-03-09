@@ -99,6 +99,7 @@ class FarmOperations {
 
   loadPlantConfig() {
     this.plantConfig = {};
+    this.seedToPlant = {};
     try {
       const plantData = JSON.parse(fs.readFileSync(
         path.join(this.projectRoot, 'gameConfig/Plant.json'), 
@@ -106,11 +107,128 @@ class FarmOperations {
       ));
       plantData.forEach(plant => {
         this.plantConfig[plant.id] = plant;
+        // 建立种子ID到植物的映射
+        if (plant.seed_id) {
+          this.seedToPlant[plant.seed_id] = plant;
+        }
       });
       this.sendLog(`[配置] 已加载植物配置: ${Object.keys(this.plantConfig).length} 种`);
     } catch (e) {
       this.sendLog(`[配置] 加载作物配置失败: ${e.message}`);
     }
+  }
+
+  // ============ 合种辅助函数 ============
+
+  /**
+   * 根据种子ID获取作物尺寸
+   * @param {number} seedId - 种子ID
+   * @returns {number} 尺寸：1=1x1普通作物，2=2x2四格作物
+   */
+  getPlantSizeBySeedId(seedId) {
+    const plant = this.seedToPlant[seedId];
+    return Math.max(1, this.toNum(plant && plant.size) || 1);
+  }
+
+  /**
+   * 根据植物ID获取作物尺寸
+   * @param {number} plantId - 植物ID
+   * @returns {number} 尺寸：1=1x1普通作物，2=2x2四格作物
+   */
+  getPlantSize(plantId) {
+    const plant = this.plantConfig[plantId];
+    return Math.max(1, this.toNum(plant && plant.size) || 1);
+  }
+
+  /**
+   * 获取副地块ID列表
+   * @param {Object} land - 土地信息
+   * @returns {number[]} 副地块ID列表
+   */
+  getSlaveLandIds(land) {
+    const ids = Array.isArray(land && land.slave_land_ids) ? land.slave_land_ids : [];
+    return [...new Set(ids.map(id => this.toNum(id)).filter(Boolean))];
+  }
+
+  /**
+   * 判断土地是否有植物数据
+   * @param {Object} land - 土地信息
+   * @returns {boolean}
+   */
+  hasPlantData(land) {
+    const plant = land && land.plant;
+    return !!(plant && Array.isArray(plant.phases) && plant.phases.length > 0);
+  }
+
+  /**
+   * 获取关联的主地块
+   * @param {Object} land - 当前土地
+   * @param {Map} landsMap - 土地映射表
+   * @returns {Object|null} 主地块信息
+   */
+  getLinkedMasterLand(land, landsMap) {
+    const landId = this.toNum(land && land.id);
+    const masterLandId = this.toNum(land && land.master_land_id);
+    if (!masterLandId || masterLandId === landId) return null;
+
+    const masterLand = landsMap.get(masterLandId);
+    if (!masterLand) return null;
+
+    const slaveIds = this.getSlaveLandIds(masterLand);
+    if (slaveIds.length > 0 && !slaveIds.includes(landId)) return null;
+
+    return masterLand;
+  }
+
+  /**
+   * 获取显示土地上下文（处理合种情况）
+   * @param {Object} land - 土地信息
+   * @param {Map} landsMap - 土地映射表
+   * @returns {Object} 显示上下文
+   */
+  getDisplayLandContext(land, landsMap) {
+    const masterLand = this.getLinkedMasterLand(land, landsMap);
+    if (masterLand && this.hasPlantData(masterLand)) {
+      const occupiedLandIds = [this.toNum(masterLand.id), ...this.getSlaveLandIds(masterLand)].filter(Boolean);
+      return {
+        sourceLand: masterLand,
+        occupiedByMaster: true,
+        masterLandId: this.toNum(masterLand.id),
+        occupiedLandIds: occupiedLandIds.length > 0 ? occupiedLandIds : [this.toNum(masterLand.id)].filter(Boolean),
+      };
+    }
+
+    const selfId = this.toNum(land && land.id);
+    return {
+      sourceLand: land,
+      occupiedByMaster: false,
+      masterLandId: selfId,
+      occupiedLandIds: [selfId].filter(Boolean),
+    };
+  }
+
+  /**
+   * 判断是否为被主地块占用的副地块
+   * @param {Object} land - 土地信息
+   * @param {Map} landsMap - 土地映射表
+   * @returns {boolean}
+   */
+  isOccupiedSlaveLand(land, landsMap) {
+    return !!this.getDisplayLandContext(land, landsMap).occupiedByMaster;
+  }
+
+  /**
+   * 构建土地映射表
+   * @param {Array} lands - 土地列表
+   * @returns {Map} 土地ID到土地信息的映射
+   */
+  buildLandMap(lands) {
+    const map = new Map();
+    for (const land of lands) {
+      const id = this.toNum(land && land.id);
+      if (id > 0) map.set(id, land);
+    }
+    return map;
   }
 
   // 生长阶段枚举
@@ -609,10 +727,16 @@ class FarmOperations {
     };
 
     const nowSec = this.getServerTimeSec();
+    const landsMap = this.buildLandMap(lands);
 
     for (const land of lands) {
       const id = this.toNum(land.id);
       if (!land.unlocked) continue;
+
+      // 跳过被主地块占用的副地块（合种情况）
+      if (this.isOccupiedSlaveLand(land, landsMap)) {
+        continue;
+      }
 
       const plant = land.plant;
       if (!plant || !plant.phases || plant.phases.length === 0) {

@@ -6,7 +6,7 @@
 const { types } = require('./proto');
 const { sendMsgAsync } = require('./network');
 const { toLong, toNum, log, logWarn, emitRuntimeHint, sleep } = require('./utils');
-const { getFruitName, getItemName, getAutoUsableItemIds } = require('./gameConfig');
+const { getFruitName, getItemName, getAutoUsableItemIds, getItemInfoById, getPlantBySeedId, getPlantByFruitId } = require('./gameConfig');
 const seedShopData = require('../tools/seed-shop-merged-export.json');
 
 // 游戏内金币和点券的物品 ID (GlobalData.GodItemId / DiamondItemId)
@@ -253,6 +253,96 @@ function stopSellLoop() {
     }
 }
 
+/**
+ * 获取背包详情（带物品信息补全和排序）
+ * 用于前端展示，包含物品名称、分类、图片、排序等
+ * @returns {Object} { totalKinds: 物品种类数, items: 物品列表 }
+ */
+async function getBagDetail() {
+    const bagReply = await getBag();
+    const rawItems = getBagItems(bagReply);
+    const merged = new Map();
+
+    for (const it of (rawItems || [])) {
+        const id = toNum(it.id);
+        const count = toNum(it.count);
+        if (id <= 0 || count <= 0) continue;
+
+        const info = getItemInfoById(id) || null;
+        let name = info && info.name ? String(info.name) : '';
+        let category = 'item';
+
+        // 根据ID判断物品类型并补全名称
+        if (id === 1 || id === 1001) {
+            name = '金币';
+            category = 'gold';
+        } else if (id === 1101) {
+            name = '经验';
+            category = 'exp';
+        } else if (getPlantByFruitId(id)) {
+            if (!name) name = `${getFruitName(id)}果实`;
+            category = 'fruit';
+        } else if (getPlantBySeedId(id)) {
+            const p = getPlantBySeedId(id);
+            if (!name) name = `${p && p.name ? p.name : '未知'}种子`;
+            category = 'seed';
+        }
+        if (!name) name = `物品${id}`;
+
+        const interactionType = info && info.interaction_type ? String(info.interaction_type) : '';
+        const priceId = info ? (Number(info.price_id) || 0) : 0;
+        const priceUnit = priceId === 1005 ? '金豆豆' : priceId === 1002 ? '点券' : '金';
+
+        if (!merged.has(id)) {
+            merged.set(id, {
+                id,
+                count: 0,
+                uid: 0,
+                name,
+                category,
+                itemType: info ? (Number(info.type) || 0) : 0,
+                priceId,
+                price: info ? (Number(info.price) || 0) : 0,
+                priceUnit,
+                level: info ? (Number(info.level) || 0) : 0,
+                interactionType,
+            });
+        }
+        const row = merged.get(id);
+        row.count += count;
+    }
+
+    const items = Array.from(merged.values());
+
+    // 排序：变异物品(17) > 种子(5) > 果实(6) > 其他，同类型按数量降序
+    items.sort((a, b) => {
+        const taRaw = Number(a.itemType || 0);
+        const tbRaw = Number(b.itemType || 0);
+
+        // 类型优先级映射
+        const typePriority = new Map([
+            [17, 0],  // 变异物品优先级最高
+            [5, 1],   // 种子
+            [6, 2],   // 果实
+        ]);
+
+        const ta = typePriority.has(taRaw) ? typePriority.get(taRaw) : (taRaw > 0 ? (1000 + taRaw) : Number.MAX_SAFE_INTEGER);
+        const tb = typePriority.has(tbRaw) ? typePriority.get(tbRaw) : (tbRaw > 0 ? (1000 + tbRaw) : Number.MAX_SAFE_INTEGER);
+
+        if (ta !== tb) return ta - tb;
+
+        // 同类型按数量降序
+        const ca = Number(a.count || 0);
+        const cb = Number(b.count || 0);
+        if (cb !== ca) return cb - ca;
+
+        // 数量相同按ID升序
+        return Number(a.id || 0) - Number(b.id || 0);
+    });
+
+    return { totalKinds: items.length, items };
+}
+
 module.exports = {
     getBag,
     sellItems,
@@ -264,4 +354,5 @@ module.exports = {
     checkAndUseGifts,
     startGiftUseLoop,
     stopGiftUseLoop,
+    getBagDetail,
 };

@@ -7,7 +7,7 @@ const { CONFIG, PlantPhase, PHASE_NAMES } = require('./config');
 const { types } = require('./proto');
 const { sendMsgAsync, getUserState, networkEvents } = require('./network');
 const { toLong, toNum, getServerTimeSec, toTimeSec, log, logWarn, sleep } = require('./utils');
-const { getPlantNameBySeedId, getPlantName, getPlantExp, formatGrowTime, getPlantGrowTime } = require('./gameConfig');
+const { getPlantNameBySeedId, getPlantName, getPlantExp, formatGrowTime, getPlantGrowTime, getPlantBySeedId, getPlantSizeBySeedId } = require('./gameConfig');
 const { getPlantingRecommendation } = require('../tools/calc-exp-yield');
 
 // ============ 内部状态 ============
@@ -15,6 +15,99 @@ let isCheckingFarm = false;
 let isFirstFarmCheck = true;
 let farmCheckTimer = null;
 let farmLoopRunning = false;
+
+// ============ 合种辅助函数 ============
+
+/**
+ * 获取副地块ID列表
+ * @param {Object} land - 土地信息
+ * @returns {number[]} 副地块ID列表
+ */
+function getSlaveLandIds(land) {
+    const ids = Array.isArray(land && land.slave_land_ids) ? land.slave_land_ids : [];
+    return [...new Set(ids.map(id => toNum(id)).filter(Boolean))];
+}
+
+/**
+ * 判断土地是否有植物数据
+ * @param {Object} land - 土地信息
+ * @returns {boolean}
+ */
+function hasPlantData(land) {
+    const plant = land && land.plant;
+    return !!(plant && Array.isArray(plant.phases) && plant.phases.length > 0);
+}
+
+/**
+ * 获取关联的主地块
+ * @param {Object} land - 当前土地
+ * @param {Map} landsMap - 土地映射表
+ * @returns {Object|null} 主地块信息
+ */
+function getLinkedMasterLand(land, landsMap) {
+    const landId = toNum(land && land.id);
+    const masterLandId = toNum(land && land.master_land_id);
+    if (!masterLandId || masterLandId === landId) return null;
+
+    const masterLand = landsMap.get(masterLandId);
+    if (!masterLand) return null;
+
+    const slaveIds = getSlaveLandIds(masterLand);
+    if (slaveIds.length > 0 && !slaveIds.includes(landId)) return null;
+
+    return masterLand;
+}
+
+/**
+ * 获取显示土地上下文（处理合种情况）
+ * @param {Object} land - 土地信息
+ * @param {Map} landsMap - 土地映射表
+ * @returns {Object} 显示上下文
+ */
+function getDisplayLandContext(land, landsMap) {
+    const masterLand = getLinkedMasterLand(land, landsMap);
+    if (masterLand && hasPlantData(masterLand)) {
+        const occupiedLandIds = [toNum(masterLand.id), ...getSlaveLandIds(masterLand)].filter(Boolean);
+        return {
+            sourceLand: masterLand,
+            occupiedByMaster: true,
+            masterLandId: toNum(masterLand.id),
+            occupiedLandIds: occupiedLandIds.length > 0 ? occupiedLandIds : [toNum(masterLand.id)].filter(Boolean),
+        };
+    }
+
+    const selfId = toNum(land && land.id);
+    return {
+        sourceLand: land,
+        occupiedByMaster: false,
+        masterLandId: selfId,
+        occupiedLandIds: [selfId].filter(Boolean),
+    };
+}
+
+/**
+ * 判断是否为被主地块占用的副地块
+ * @param {Object} land - 土地信息
+ * @param {Map} landsMap - 土地映射表
+ * @returns {boolean}
+ */
+function isOccupiedSlaveLand(land, landsMap) {
+    return !!getDisplayLandContext(land, landsMap).occupiedByMaster;
+}
+
+/**
+ * 构建土地映射表
+ * @param {Array} lands - 土地列表
+ * @returns {Map} 土地ID到土地信息的映射
+ */
+function buildLandMap(lands) {
+    const map = new Map();
+    for (const land of lands) {
+        const id = toNum(land && land.id);
+        if (id > 0) map.set(id, land);
+    }
+    return map;
+}
 
 // ============ 农场 API ============
 
@@ -149,21 +242,53 @@ function encodePlantRequest(seedId, landIds) {
 
 /**
  * 种植 - 游戏中拖动种植间隔很短，这里用 50ms
+ * 支持合种（2x2作物），会正确处理占用的副地块
+ * @param {number} seedId - 种子ID
+ * @param {number[]} landIds - 土地ID列表
+ * @param {Object} options - 可选参数
+ * @param {number} options.maxPlantCount - 最大种植数量（用于合种计算）
+ * @returns {Object} { planted: 成功种植数量, plantedLandIds: 种植的土地ID列表, occupiedLandIds: 占用的所有土地ID列表 }
  */
-async function plantSeeds(seedId, landIds) {
+async function plantSeeds(seedId, landIds, options = {}) {
     let successCount = 0;
-    for (const landId of landIds) {
+    const plantedLandIds = [];
+    const occupiedLandIds = new Set();
+    const maxPlantCount = Math.max(0, toNum(options.maxPlantCount) || 0) || Number.POSITIVE_INFINITY;
+    const pendingLandIds = new Set((Array.isArray(landIds) ? landIds : []).map(id => toNum(id)).filter(Boolean));
+
+    for (const rawLandId of landIds) {
+        const landId = toNum(rawLandId);
+        if (!landId || !pendingLandIds.has(landId)) continue;
+        if (successCount >= maxPlantCount) break;
+
         try {
             const body = encodePlantRequest(seedId, [landId]);
             const { body: replyBody } = await sendMsgAsync('gamepb.plantpb.PlantService', 'Plant', body);
-            types.PlantReply.decode(replyBody);
+            const reply = types.PlantReply.decode(replyBody);
+            const changedLands = Array.isArray(reply && reply.land) ? reply.land : [];
+            const changedMap = buildLandMap(changedLands);
+            const selfLand = changedMap.get(landId);
+            const displayContext = getDisplayLandContext(selfLand || { id: landId }, changedMap);
+            const occupiedIds = displayContext.occupiedLandIds.length > 0
+                ? displayContext.occupiedLandIds
+                : [landId];
+
             successCount++;
+            plantedLandIds.push(displayContext.masterLandId || landId);
+            for (const occupiedId of occupiedIds) {
+                occupiedLandIds.add(occupiedId);
+                pendingLandIds.delete(occupiedId);  // 从待处理列表中移除已占用的地块
+            }
         } catch (e) {
             logWarn('种植', `土地#${landId} 失败: ${e.message}`);
         }
         if (landIds.length > 1) await sleep(50);  // 50ms 间隔
     }
-    return successCount;
+    return {
+        planted: successCount,
+        plantedLandIds,
+        occupiedLandIds: [...occupiedLandIds],
+    };
 }
 
 async function findBestSeed(landsCount) {
@@ -270,22 +395,35 @@ async function autoPlantEmptyLands(deadLandIds, emptyLandIds, unlockedLandCount)
     const seedName = getPlantNameBySeedId(bestSeed.seedId);
     const growTime = getPlantGrowTime(1020000 + (bestSeed.seedId - 20000));  // 转换为植物ID
     const growTimeStr = growTime > 0 ? ` 生长${formatGrowTime(growTime)}` : '';
-    log('商店', `最佳种子: ${seedName} (${bestSeed.seedId}) 价格=${bestSeed.price}金币${growTimeStr}`);
+    const plantSize = getPlantSizeBySeedId(bestSeed.seedId);
+    const landFootprint = plantSize * plantSize;  // 合种占用的土地数量（2x2=4）
+    log('商店', `最佳种子: ${seedName} (${bestSeed.seedId}) 价格=${bestSeed.price}金币${growTimeStr}${plantSize > 1 ? ` ${plantSize}x${plantSize}合种` : ''}`);
 
-    // 3. 购买
-    const needCount = landsToPlant.length;
+    // 3. 购买（按合种尺寸计算需要购买的种子数量）
+    let needCount = landsToPlant.length;
+    if (landFootprint > 1) {
+        needCount = Math.floor(landsToPlant.length / landFootprint);
+        if (needCount <= 0) {
+            log('种植', `${seedName} 需要至少 ${landFootprint} 块空地才能合并种植，当前仅 ${landsToPlant.length} 块可用，已跳过`, {
+                seedId: bestSeed.seedId,
+                landFootprint,
+                emptyCount: landsToPlant.length,
+            });
+            return;
+        }
+    }
     const totalCost = bestSeed.price * needCount;
     if (totalCost > state.gold) {
         logWarn('商店', `金币不足! 需要 ${totalCost} 金币, 当前 ${state.gold} 金币`);
         const canBuy = Math.floor(state.gold / bestSeed.price);
         if (canBuy <= 0) return;
-        landsToPlant = landsToPlant.slice(0, canBuy);
-        log('商店', `金币有限，只种 ${canBuy} 块地`);
+        needCount = canBuy;
+        log('商店', plantSize > 1 ? `金币有限，只尝试种植 ${canBuy} 组 ${plantSize}x${plantSize} 作物` : `金币有限，只种 ${canBuy} 块地`);
     }
 
     let actualSeedId = bestSeed.seedId;
     try {
-        const buyReply = await buyGoods(bestSeed.goodsId, landsToPlant.length, bestSeed.price);
+        const buyReply = await buyGoods(bestSeed.goodsId, needCount, bestSeed.price);
         if (buyReply.get_items && buyReply.get_items.length > 0) {
             const gotItem = buyReply.get_items[0];
             const gotId = toNum(gotItem.id);
@@ -299,19 +437,22 @@ async function autoPlantEmptyLands(deadLandIds, emptyLandIds, unlockedLandCount)
             }
         }
         const boughtName = getPlantNameBySeedId(actualSeedId);
-        log('购买', `已购买 ${boughtName}种子 x${landsToPlant.length}, 花费 ${bestSeed.price * landsToPlant.length} 金币`);
+        log('购买', `已购买 ${boughtName}种子 x${needCount}, 花费 ${bestSeed.price * needCount} 金币`);
     } catch (e) {
         logWarn('购买', e.message);
         return;
     }
 
-    // 4. 种植（逐块拖动，间隔50ms）
+    // 4. 种植（逐块拖动，间隔50ms，支持合种）
     let plantedLands = [];
     try {
-        const planted = await plantSeeds(actualSeedId, landsToPlant);
-        log('种植', `已在 ${planted} 块地种植 (${landsToPlant.join(',')})`);
+        const { planted, plantedLandIds, occupiedLandIds } = await plantSeeds(actualSeedId, landsToPlant, { maxPlantCount: needCount });
+        const occupiedCount = occupiedLandIds.length > 0 ? occupiedLandIds.length : planted;
+        log('种植', plantSize > 1
+            ? `已种植 ${planted} 组 ${plantSize}x${plantSize} 作物，占用 ${occupiedCount} 块地 (${occupiedLandIds.join(',')})`
+            : `已在 ${planted} 块地种植 (${landsToPlant.slice(0, planted).join(',')})`);
         if (planted > 0) {
-            plantedLands = landsToPlant.slice(0, planted);
+            plantedLands = plantedLandIds;
         }
     } catch (e) {
         logWarn('种植', e.message);
@@ -374,6 +515,7 @@ function analyzeLands(lands, antiStealConfig = null) {
 
     const nowSec = getServerTimeSec();
     const debug = false;
+    const landsMap = buildLandMap(lands);
 
     if (debug) {
         console.log('');
@@ -387,6 +529,12 @@ function analyzeLands(lands, antiStealConfig = null) {
         const id = toNum(land.id);
         if (!land.unlocked) {
             if (debug) console.log(`  土地#${id}: 未解锁`);
+            continue;
+        }
+
+        // 跳过被主地块占用的副地块（合种情况）
+        if (isOccupiedSlaveLand(land, landsMap)) {
+            if (debug) console.log(`  土地#${id}: 被主地块占用的副地块（合种）`);
             continue;
         }
 

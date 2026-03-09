@@ -237,7 +237,7 @@ function startChecking(loginCode: string) {
 // 确认登录
 async function confirm() {
   if (!code.value.trim()) return;
-  
+
   submitting.value = true;
   try {
     await axios.put(`${API_BASE_URL}/accounts/${props.accountId}/relogin`, {
@@ -245,8 +245,13 @@ async function confirm() {
     });
     emit('success');
     close();
-  } catch (error) {
-    alert('更新登录信息失败，请重试');
+  } catch (error: any) {
+    if (error.response?.status === 404) {
+      alert('账号不存在，数据可能已丢失，请删除此账号后重新添加');
+    } else {
+      const errorMsg = error.response?.data?.error || '更新登录信息失败，请重试';
+      alert(errorMsg);
+    }
   } finally {
     submitting.value = false;
   }

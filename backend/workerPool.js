@@ -34,10 +34,10 @@ class WorkerPool {
 
     // 加入队列
     this.workerQueue.push({ accountId, accountData });
-    
+
     // 处理队列
-    this.processQueue();
-    
+    await this.processQueue();
+
     return { queued: true, position: this.workerQueue.length };
   }
 
@@ -48,23 +48,29 @@ class WorkerPool {
     if (this.isProcessingQueue) return;
     this.isProcessingQueue = true;
 
-    while (this.workerQueue.length > 0) {
-      // 检查当前运行的 Worker 数量
-      const runningCount = Array.from(this.workers.values()).filter(
-        w => this.workerStates.get(w.accountId)?.status === 'running'
-      ).length;
+    try {
+      while (this.workerQueue.length > 0) {
+        // 检查当前运行的 Worker 数量
+        const runningCount = Array.from(this.workers.values()).filter(
+          w => this.workerStates.get(w.accountId)?.status === 'running'
+        ).length;
 
-      if (runningCount >= this.maxConcurrentWorkers) {
-        // 等待有 Worker 结束
-        await this.waitForAvailableSlot();
-        continue;
+        if (runningCount >= this.maxConcurrentWorkers) {
+          // 等待有 Worker 结束
+          await this.waitForAvailableSlot();
+          continue;
+        }
+
+        const { accountId, accountData } = this.workerQueue.shift();
+        try {
+          await this.createWorker(accountId, accountData);
+        } catch (error) {
+          console.error(`[WorkerPool] 创建 Worker ${accountId} 失败:`, error.message);
+        }
       }
-
-      const { accountId, accountData } = this.workerQueue.shift();
-      await this.createWorker(accountId, accountData);
+    } finally {
+      this.isProcessingQueue = false;
     }
-
-    this.isProcessingQueue = false;
   }
 
   /**

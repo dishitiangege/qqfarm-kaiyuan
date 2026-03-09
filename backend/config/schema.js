@@ -118,9 +118,11 @@ const accountSchema = z.object({
 // 验证账号配置
 function validateAccountConfig(config) {
   try {
-    return accountConfigSchema.parse(config);
+    // 处理 null 或 undefined 的情况
+    const configToParse = config || {};
+    return accountConfigSchema.parse(configToParse);
   } catch (error) {
-    console.error('配置验证失败:', error.errors);
+    console.error('配置验证失败:', error.errors || error.message);
     // 返回默认配置
     return accountConfigSchema.parse({});
   }

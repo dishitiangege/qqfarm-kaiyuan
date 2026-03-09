@@ -239,8 +239,18 @@ async function collectAndSendData() {
     const nowSec = farmOps.getServerTimeSec();
     
     let landStatus = [];
+    // 构建土地映射表用于合种判断
+    const landsMap = farmOps.buildLandMap(landsReply?.lands || []);
+
     if (landsReply && landsReply.lands) {
       landStatus = landsReply.lands.map(land => {
+        const landId = farmOps.toNum(land.id);
+
+        // 判断合种相关属性
+        const isOccupiedSlave = farmOps.isOccupiedSlaveLand(land, landsMap);
+        const displayContext = farmOps.getDisplayLandContext(land, landsMap);
+        const isMasterLand = displayContext.masterLandId === landId && !isOccupiedSlave;
+
         if (!land.unlocked) {
           return { 
             status: '锁定', 
@@ -252,7 +262,38 @@ async function collectAndSendData() {
             landLevel: farmOps.toNum(land.level),
             landMaxLevel: farmOps.toNum(land.maxLevel),
             couldUpgrade: land.couldUpgrade || false,
-            stealable: false
+            stealable: false,
+            plantSize: 1,
+            isMasterLand: false,
+            isSlaveLand: false
+          };
+        }
+
+        // 如果是被占用的副地块，显示主地块的信息
+        if (isOccupiedSlave) {
+          const masterLand = displayContext.sourceLand;
+          const masterPlant = masterLand?.plant;
+          const masterPlantId = farmOps.toNum(masterPlant?.id);
+          const masterPlantInfo = farmOps.plantConfig[masterPlantId];
+          const masterPlantName = masterPlantInfo?.name || masterPlant?.name || '未知';
+          const plantSize = farmOps.getPlantSize(masterPlantId);
+
+          return {
+            status: `${masterPlantName} (合种副地块)`,
+            phase: -2, // 特殊标记表示副地块
+            phaseName: '合种中',
+            plantName: masterPlantName,
+            progress: 0,
+            totalProgress: 0,
+            nextPhaseTime: 0,
+            matureTime: 0,
+            landLevel: farmOps.toNum(land.level),
+            landMaxLevel: farmOps.toNum(land.maxLevel),
+            couldUpgrade: false,
+            stealable: false,
+            plantSize: plantSize,
+            isMasterLand: false,
+            isSlaveLand: true
           };
         }
         
@@ -268,9 +309,16 @@ async function collectAndSendData() {
             landLevel: farmOps.toNum(land.level),
             landMaxLevel: farmOps.toNum(land.maxLevel),
             couldUpgrade: land.couldUpgrade || false,
-            stealable: false
+            stealable: false,
+            plantSize: 1,
+            isMasterLand: false,
+            isSlaveLand: false
           };
         }
+
+        // 获取作物尺寸
+        const plantId = farmOps.toNum(plant.id);
+        const plantSize = farmOps.getPlantSize(plantId);
 
         const currentPhase = farmOps.getCurrentPhase(plant.phases);
         const plantInfo = farmOps.plantConfig[farmOps.toNum(plant.id)];
@@ -380,14 +428,17 @@ async function collectAndSendData() {
           landLevel: farmOps.toNum(land.level),
           landMaxLevel: farmOps.toNum(land.maxLevel),
           couldUpgrade: land.couldUpgrade || false,
-          stealable: currentPhase === farmOps.PlantPhase.MATURE
+          stealable: currentPhase === farmOps.PlantPhase.MATURE,
+          plantSize: plantSize,
+          isMasterLand: isMasterLand,
+          isSlaveLand: false
         };
       });
-      
+
       while (landStatus.length < 24) {
-        landStatus.push({ 
-          status: '锁定', 
-          phase: -1, 
+        landStatus.push({
+          status: '锁定',
+          phase: -1,
           phaseName: '锁定',
           totalProgress: 0,
           nextPhaseTime: 0,
@@ -395,7 +446,10 @@ async function collectAndSendData() {
           landLevel: 0,
           landMaxLevel: 0,
           couldUpgrade: false,
-          stealable: false
+          stealable: false,
+          plantSize: 1,
+          isMasterLand: false,
+          isSlaveLand: false
         });
       }
     }
