@@ -143,24 +143,24 @@
       }
     },
     "stats": {
-      "exp": 27801,
-      "coins": 190556,
+      "exp": 28011,
+      "coins": 190436,
       "expProgress": 0,
       "expNeeded": 100,
       "onlineTime": 0,
       "sessionStats": {
-        "exp": 70,
-        "harvest": 70,
+        "exp": 130,
+        "harvest": 130,
         "steal": 0,
         "water": 0,
         "weed": 0,
         "bug": 0,
         "sell": 0,
-        "onlineTime": 3
+        "onlineTime": 8
       },
       "todayStats": {
-        "exp": 70,
-        "harvest": 70,
+        "exp": 130,
+        "harvest": 130,
         "steal": 0,
         "water": 0,
         "weed": 0,
@@ -174,9 +174,9 @@
           "phaseName": "发芽",
           "plantName": "白萝卜",
           "progress": 0,
-          "totalProgress": 3,
+          "totalProgress": 76,
           "nextPhaseTime": 0,
-          "matureTime": 1773060465,
+          "matureTime": 1773060694,
           "landLevel": 1,
           "landMaxLevel": 0,
           "couldUpgrade": false,
@@ -191,9 +191,9 @@
           "phaseName": "发芽",
           "plantName": "白萝卜",
           "progress": 0,
-          "totalProgress": 3,
+          "totalProgress": 76,
           "nextPhaseTime": 0,
-          "matureTime": 1773060465,
+          "matureTime": 1773060694,
           "landLevel": 1,
           "landMaxLevel": 0,
           "couldUpgrade": false,
@@ -208,9 +208,9 @@
           "phaseName": "发芽",
           "plantName": "白萝卜",
           "progress": 0,
-          "totalProgress": 0,
+          "totalProgress": 73,
           "nextPhaseTime": 0,
-          "matureTime": 1773060466,
+          "matureTime": 1773060695,
           "landLevel": 1,
           "landMaxLevel": 0,
           "couldUpgrade": false,
@@ -225,9 +225,9 @@
           "phaseName": "发芽",
           "plantName": "白萝卜",
           "progress": 0,
-          "totalProgress": 0,
+          "totalProgress": 73,
           "nextPhaseTime": 0,
-          "matureTime": 1773060466,
+          "matureTime": 1773060695,
           "landLevel": 1,
           "landMaxLevel": 0,
           "couldUpgrade": false,
@@ -242,9 +242,9 @@
           "phaseName": "发芽",
           "plantName": "白萝卜",
           "progress": 0,
-          "totalProgress": 0,
+          "totalProgress": 73,
           "nextPhaseTime": 0,
-          "matureTime": 1773060466,
+          "matureTime": 1773060695,
           "landLevel": 1,
           "landMaxLevel": 0,
           "couldUpgrade": false,
@@ -259,9 +259,9 @@
           "phaseName": "发芽",
           "plantName": "白萝卜",
           "progress": 0,
-          "totalProgress": 0,
+          "totalProgress": 73,
           "nextPhaseTime": 0,
-          "matureTime": 1773060466,
+          "matureTime": 1773060695,
           "landLevel": 1,
           "landMaxLevel": 0,
           "couldUpgrade": false,
@@ -276,9 +276,9 @@
           "phaseName": "发芽",
           "plantName": "白萝卜",
           "progress": 0,
-          "totalProgress": 0,
+          "totalProgress": 73,
           "nextPhaseTime": 0,
-          "matureTime": 1773060466,
+          "matureTime": 1773060695,
           "landLevel": 1,
           "landMaxLevel": 0,
           "couldUpgrade": false,
@@ -293,9 +293,9 @@
           "phaseName": "发芽",
           "plantName": "白萝卜",
           "progress": 0,
-          "totalProgress": 0,
+          "totalProgress": 73,
           "nextPhaseTime": 0,
-          "matureTime": 1773060466,
+          "matureTime": 1773060695,
           "landLevel": 1,
           "landMaxLevel": 0,
           "couldUpgrade": false,
@@ -310,9 +310,9 @@
           "phaseName": "发芽",
           "plantName": "白萝卜",
           "progress": 0,
-          "totalProgress": 0,
+          "totalProgress": 73,
           "nextPhaseTime": 0,
-          "matureTime": 1773060466,
+          "matureTime": 1773060695,
           "landLevel": 1,
           "landMaxLevel": 0,
           "couldUpgrade": false,
@@ -327,9 +327,9 @@
           "phaseName": "发芽",
           "plantName": "白萝卜",
           "progress": 0,
-          "totalProgress": 0,
+          "totalProgress": 73,
           "nextPhaseTime": 0,
-          "matureTime": 1773060466,
+          "matureTime": 1773060695,
           "landLevel": 1,
           "landMaxLevel": 0,
           "couldUpgrade": false,
@@ -557,12 +557,12 @@
         },
         {
           "id": 40002,
-          "count": 755,
+          "count": 1050,
           "uid": 4623
         },
         {
           "id": 40002,
-          "count": 20,
+          "count": 25,
           "uid": 4628
         },
         {
@@ -601,18 +601,8 @@
           "uid": 4631
         },
         {
-          "id": 1012,
-          "count": 0,
-          "uid": 0
-        },
-        {
-          "id": 1011,
-          "count": 774411,
-          "uid": 0
-        },
-        {
           "id": 1001,
-          "count": 190556,
+          "count": 190436,
           "uid": 0
         },
         {
@@ -621,8 +611,18 @@
           "uid": 0
         },
         {
+          "id": 1012,
+          "count": 0,
+          "uid": 0
+        },
+        {
+          "id": 1011,
+          "count": 772863,
+          "uid": 0
+        },
+        {
           "id": 1101,
-          "count": 27801,
+          "count": 28011,
           "uid": 0
         }
       ],
