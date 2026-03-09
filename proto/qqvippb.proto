@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package gamepb.qqvippb;
+
+import "corepb.proto";
+
+message GetDailyGiftStatusRequest {}
+
+message GetDailyGiftStatusReply {
+    bool can_claim = 1;
+    bool has_gift = 2;
+}
+
+message ClaimDailyGiftRequest {}
+
+message ClaimDailyGiftReply {
+    repeated corepb.Item items = 1;
+}

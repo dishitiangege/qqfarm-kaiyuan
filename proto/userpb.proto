@@ -1,0 +1,197 @@
+syntax = "proto3";
+
+package gamepb.userpb;
+
+import "corepb.proto";
+
+// ============ 登录请求 ============
+message LoginRequest {
+    // 字段 1,2 保留未使用
+    int64 sharer_id = 3;
+    string sharer_open_id = 4;
+    DeviceInfo device_info = 5;
+    int64 share_cfg_id = 6;
+    string scene_id = 7;
+    ReportData report_data = 8;
+}
+
+// 设备信息
+message DeviceInfo {
+    string client_version = 1;    // e.g. "1.6.0.8_20251224"
+    string sys_software = 2;      // e.g. "Windows Unknown x64"
+    string sys_hardware = 3;
+    string telecom_oper = 4;
+    string network = 5;           // e.g. "wifi"
+    int64 screen_width = 6;
+    int64 screen_height = 7;
+    float density = 8;
+    string cpu = 9;               // e.g. "microsoft"
+    int64 memory = 10;
+    string gl_render = 11;
+    string gl_version = 12;
+    string device_id = 13;
+    string android_oaid = 14;
+    string ios_caid = 15;
+}
+
+// 上报数据
+message ReportData {
+    string callback = 1;
+    string cd_extend_info = 2;
+    string click_id = 3;
+    string clue_token = 4;
+    string minigame_channel = 5;
+    int32 minigame_platid = 6;
+    string req_id = 7;
+    string trackid = 8;
+}
+
+// ============ 登录回复 ============
+message LoginReply {
+    BasicInfo basic = 1;
+    // ItemBag item_bag = 2;         // corepb.ItemBag, 复杂结构先跳过
+    int64 time_now_millis = 3;
+    bool is_first_login = 4;
+    // GuideInfo guide_info = 5;
+    repeated QQGroupInfo qq_group_infos = 6;
+    // Illustrated illustrated = 7;
+    // repeated SystemUnlockItem unlocked_items = 8;
+    VersionInfo version_info = 9;
+    // MallMsg mall_msg = 10;
+    int64 qq_friend_recommend_authorized = 11;
+}
+
+// 用户基本信息
+message BasicInfo {
+    int64 gid = 1;
+    string name = 2;
+    int64 level = 3;
+    int64 exp = 4;
+    int64 gold = 5;
+    string open_id = 6;
+    string avatar_url = 7;
+    string remark = 8;
+    string signature = 9;
+    int32 gender = 10;
+    // repeated AvatarFrame equip_avatar_frames = 11;
+    // map<int64, ShareInfo> share_infos = 12;
+    int32 authorized_status = 13;
+    bool disable_nudge = 14;
+}
+
+// QQ群信息
+message QQGroupInfo {
+    string qq_group_id = 1;
+    string qq_group_name = 2;
+}
+
+// 版本信息
+message VersionInfo {
+    int32 status = 1;
+    string version_recommend = 2;
+    string version_force = 3;
+    string version_protocol = 4;
+}
+
+// ============ 心跳 ============
+message HeartbeatRequest {
+    int64 gid = 1;
+    string client_version = 2;
+}
+
+message HeartbeatReply {
+    int64 server_time = 1;
+    VersionInfo version_info = 2;
+}
+
+// ============ 上报分享点击 ============
+// 用于已登录状态下处理分享链接（触发好友申请）
+message ReportArkClickRequest {
+    int64 sharer_id = 1;
+    string sharer_open_id = 2;
+    string scene_id = 3;
+    int64 share_cfg_id = 4;
+}
+
+message ReportArkClickReply {
+    // 通常为空响应
+}
+
+// ============ 服务器推送通知 ============
+
+// 基本信息变化通知 (升级/金币变化等)
+message BasicNotify {
+    BasicInfo basic = 1;
+}
+
+// ============ TlogReport 行为流上报 ============
+enum OSType {
+    OSTYPE_UNKNOWN = 0;
+    OSTYPE_ANDROID = 1;
+    OSTYPE_IOS = 2;
+    OSTYPE_HARMONY = 3;
+    OSTYPE_PC = 4;
+}
+
+enum PlatFromType {
+    PLATFROMTYPE_UNKNOWN = 0;
+    PLATFROMTYPE_WX = 1;
+    PLATFROMTYPE_QQ = 2;
+    PLATFROMTYPE_PC = 3;
+}
+
+message ClientReportFlowRequest {
+    int32 os_type = 1;
+    int32 plat_from_type = 2;
+    string open_id = 3;
+    int64 gid = 4;
+    string name = 5;
+    int64 now = 6;
+    int64 level = 7;
+    int64 flow_type = 101;
+    string flow_type_str = 102;
+    int64 param_int1 = 103;
+    int64 param_int2 = 104;
+    int64 param_int3 = 105;
+    int64 param_int4 = 106;
+    int64 param_int5 = 107;
+    string param_str6 = 108;
+    string param_str7 = 109;
+    string param_str8 = 110;
+    string param_str9 = 111;
+    string param_str10 = 112;
+}
+
+message ClientReportFlowReply {}
+
+message BatchClientReportFlowRequest {
+    repeated ClientReportFlowRequest flows = 1;
+}
+
+message BatchClientReportFlowReply {
+    int32 success_count = 1;
+    int32 fail_count = 2;
+}
+
+// ============ QQ会员每日礼包 ============
+
+message GetDailyGiftStatusRequest {}
+
+message GetDailyGiftStatusReply {
+    bool is_qq_vip = 1;
+    bool can_claim = 2;
+    bool claimed_today = 3;
+}
+
+message ClaimDailyGiftRequest {}
+
+message ClaimDailyGiftReply {
+    repeated corepb.Item rewards = 1;
+}
+
+// QQ会员礼包状态变化推送
+message DailyGiftStatusChangedNTF {
+    bool is_qq_vip = 1;
+    bool can_claim = 2;
+    bool claimed_today = 3;
+}

@@ -1,0 +1,68 @@
+自定义开源协议 (Custom Open Source License)
+
+版权所有 (c) 2025 玄机博客 <https://xuanji.hk-gov.com/>
+
+特此授予任何获得本软件及相关文档文件（以下简称"软件"）的人免费使用、复制、修改、合并、发布、分发软件的权利，但须遵守以下条件：
+
+1. 版权声明和许可声明必须包含在所有副本或实质性部分中。
+
+2. 禁止倒卖条款：
+   a) 严禁将本软件或基于本软件的衍生作品进行售卖、转让或用于任何商业盈利目的。
+   b) 严禁以任何形式将本软件作为商品或服务进行销售。
+   c) 严禁删除、修改或隐藏原作者署名和版权信息。
+
+3. 尊重原创：
+   a) 使用本软件时，请保留原作者署名和版权声明。
+   b) 如需转载或分享，请注明出处和原作者信息。
+   c) 欢迎提交 Issue 和 Pull Request 参与项目改进。
+
+4. 特别致谢：
+   本软件的开发参考了 linguo2625469 的代码，特此感谢。
+
+5. 免责声明：
+   本软件按"原样"提供，不提供任何形式的明示或暗示保证，包括但不限于对适销性、特定用途适用性和非侵权性的保证。在任何情况下，作者或版权持有人均不对因本软件或本软件的使用或其他交易而产生的任何索赔、损害或其他责任承担责任。
+
+6. 协议违反：
+   如发现任何违反本协议的行为，原作者保留追究法律责任的权利。
+
+---
+
+Custom Open Source License
+
+Copyright (c) 2025 玄机博客 <https://xuanji.hk-gov.com/>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to use,
+copy, modify, merge, publish, distribute, subject to the following conditions:
+
+1. The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+2. No Resale Clause:
+   a) Selling, transferring, or using this Software or derivative works for any
+      commercial profit purpose is strictly prohibited.
+   b) Selling this Software as a product or service in any form is strictly prohibited.
+   c) Removing, modifying, or hiding the original author attribution and copyright
+      information is strictly prohibited.
+
+3. Respect for Original Work:
+   a) Please retain the original author attribution and copyright notices when using
+      this Software.
+   b) When redistributing or sharing, please indicate the source and original author.
+   c) Issues and Pull Requests are welcome for project improvement.
+
+4. Special Thanks:
+   The development of this Software referenced code from linguo2625469, hereby acknowledged.
+
+5. Disclaimer:
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+6. License Violation:
+   The original author reserves the right to pursue legal action for any violation
+   of this license.

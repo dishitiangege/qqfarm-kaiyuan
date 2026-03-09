@@ -1,0 +1,4693 @@
+<template>
+  <div style="padding: 24px; max-width: 1200px; margin: 0 auto;">
+    <!-- 概览标签页 -->
+    <div v-if="modelValue === 'overview'">
+      <!-- 账号信息头部 -->
+      <div class="header-section">
+        <div class="header-left">
+          <!-- 头像 -->
+          <div class="header-avatar">
+            {{ account.name.charAt(0) }}
+          </div>
+          <div class="header-info">
+            <div class="header-name-row">
+              <h2 class="header-name">{{ account.name }}</h2>
+              <span :class="['header-status', isRunning ? 'status-running' : 'status-stopped']">
+                {{ isRunning ? '运行中' : '已停止' }}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 启动/停止按钮 -->
+        <div class="header-actions">
+          <!-- 重新登录按钮 -->
+          <ReloginButton @click="$emit('relogin')" />
+
+          <!-- 全息开关 - 启动/停止脚本 -->
+          <HoloToggle 
+            v-model="isRunning" 
+            label="脚本开关"
+            @update:modelValue="toggleScript"
+          />
+        </div>
+      </div>
+      <!-- 统计卡片 -->
+      <div class="stats-grid">
+        <!-- 等级卡片 -->
+        <Card3D 
+          title="等级" 
+          :description="`当前等级: Lv${getCurrentLevel()} | 总经验: ${account.stats.exp.toLocaleString()}`"
+          :show-more="false"
+          variant="level"
+        >
+          <template #icon>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+          </template>
+          <template #actions>
+            <div style="font-size: 28px; font-weight: 700; color: white;">Lv{{ getCurrentLevel() }}</div>
+          </template>
+        </Card3D>
+
+        <!-- 金币卡片 -->
+        <Card3D 
+          title="金币" 
+          :description="'当前拥有的金币数量'"
+          :show-more="false"
+          variant="coin"
+        >
+          <template #icon>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </template>
+          <template #actions>
+            <div style="font-size: 24px; font-weight: 700; color: white;">{{ account.stats.coins.toLocaleString() }}</div>
+          </template>
+        </Card3D>
+
+        <!-- 经验进度卡片 -->
+        <Card3D 
+          title="经验进度" 
+          :description="`预计升级: ${getEstimatedTimeToLevelUp()}`"
+          :show-more="false"
+          variant="exp"
+        >
+          <template #icon>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+          </template>
+          <template #actions>
+            <div style="font-size: 18px; font-weight: 700; color: white;">{{ getExpProgressPercent() }}%</div>
+          </template>
+        </Card3D>
+
+        <!-- 在线时长卡片 -->
+        <Card3D 
+          title="在线时长" 
+          :description="'本次登录时长统计'"
+          :show-more="false"
+          variant="time"
+        >
+          <template #icon>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+          </template>
+          <template #actions>
+            <div style="font-size: 24px; font-weight: 700; color: white;">{{ account.stats.sessionStats?.onlineTime || 0 }}<span style="font-size: 12px; margin-left: 2px;">分钟</span></div>
+          </template>
+        </Card3D>
+      </div>
+
+      <!-- 统计区域（本次登录 / 今日累计 Tab 切换） -->
+      <div style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px;">
+        <!-- Tab 切换按钮 -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div style="display: flex; gap: 8px; background: #f1f5f9; padding: 4px; border-radius: 10px;">
+            <button 
+              @click="statsTab = 'session'"
+              :style="{ 
+                background: statsTab === 'session' ? '#3b82f6' : 'transparent',
+                color: statsTab === 'session' ? 'white' : '#64748b',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '8px 16px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }"
+            >
+              本次登录
+            </button>
+            <button 
+              @click="statsTab = 'daily'"
+              :style="{ 
+                background: statsTab === 'daily' ? '#22c55e' : 'transparent',
+                color: statsTab === 'daily' ? 'white' : '#64748b',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '8px 16px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }"
+            >
+              今日累计
+            </button>
+          </div>
+          <div style="font-size: 13px; color: #64748b;">
+            <span v-if="statsTab === 'session'">在线时长: {{ formatOnlineTime(account.stats.sessionStats?.onlineTime || 0) }}</span>
+            <span v-else>累计在线: 今日全天</span>
+          </div>
+        </div>
+
+        <!-- 本次登录统计内容 -->
+        <div v-if="statsTab === 'session'" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+          <StatCard 
+            label="获得经验" 
+            :value="account.stats.sessionStats?.exp || 0" 
+            value-color="#22c55e"
+            icon-bg="linear-gradient(135deg, #22c55e 0%, #16a34a 100%)"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="经验/分钟" 
+            :value="getExpPerMinute()" 
+            :hint="account.stats.sessionStats?.onlineTime > 0 ? `约 ${getExpPerHour()}/小时` : ''"
+            value-color="#8b5cf6"
+            icon-bg="linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                <polyline points="17 6 23 6 23 12"></polyline>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="收获" 
+            :value="account.stats.sessionStats?.harvest || 0" 
+            value-color="#22c55e"
+            icon-bg="linear-gradient(135deg, #22c55e 0%, #16a34a 100%)"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="偷菜" 
+            :value="account.stats.sessionStats?.steal || 0" 
+            value-color="#fbbf24"
+            icon-bg="linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="帮浇水" 
+            :value="account.stats.sessionStats?.water || 0" 
+            value-color="#3b82f6"
+            icon-bg="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="帮除草" 
+            :value="account.stats.sessionStats?.weed || 0" 
+            value-color="#3b82f6"
+            icon-bg="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="帮除虫" 
+            :value="account.stats.sessionStats?.bug || 0" 
+            value-color="#3b82f6"
+            icon-bg="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="出售金币" 
+            :value="account.stats.sessionStats?.sell || 0" 
+            value-color="#fbbf24"
+            icon-bg="linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </template>
+          </StatCard>
+        </div>
+
+        <!-- 今日累计统计内容 -->
+        <div v-else style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+          <StatCard 
+            label="累计经验" 
+            :value="account.stats.todayStats?.exp?.toLocaleString() || 0" 
+            value-color="#22c55e"
+            icon-bg="linear-gradient(135deg, #22c55e 0%, #16a34a 100%)"
+            :gradient="true"
+            :gradient-colors="['#dcfce7', '#bbf7d0']"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="累计收获" 
+            :value="account.stats.todayStats?.harvest || 0" 
+            value-color="#22c55e"
+            icon-bg="linear-gradient(135deg, #22c55e 0%, #16a34a 100%)"
+            :gradient="true"
+            :gradient-colors="['#dcfce7', '#bbf7d0']"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="累计偷菜" 
+            :value="account.stats.todayStats?.steal || 0" 
+            value-color="#fbbf24"
+            icon-bg="linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)"
+            :gradient="true"
+            :gradient-colors="['#fef3c7', '#fde68a']"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="累计浇水" 
+            :value="account.stats.todayStats?.water || 0" 
+            value-color="#3b82f6"
+            icon-bg="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
+            :gradient="true"
+            :gradient-colors="['#dbeafe', '#bfdbfe']"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="累计除草" 
+            :value="account.stats.todayStats?.weed || 0" 
+            value-color="#3b82f6"
+            icon-bg="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
+            :gradient="true"
+            :gradient-colors="['#dbeafe', '#bfdbfe']"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="累计除虫" 
+            :value="account.stats.todayStats?.bug || 0" 
+            value-color="#3b82f6"
+            icon-bg="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
+            :gradient="true"
+            :gradient-colors="['#dbeafe', '#bfdbfe']"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </template>
+          </StatCard>
+          <StatCard 
+            label="累计售卖金币" 
+            :value="account.stats.todayStats?.sell?.toLocaleString() || 0" 
+            value-color="#fbbf24"
+            icon-bg="linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)"
+            :gradient="true"
+            :gradient-colors="['#fef3c7', '#fde68a']"
+            :show-decoration="true"
+          >
+            <template #icon>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </template>
+          </StatCard>
+        </div>
+      </div>
+
+      <!-- 操作限制显示 -->
+      <div v-if="account.stats?.operationLimits && (Array.isArray(account.stats.operationLimits) ? account.stats.operationLimits.length > 0 : Object.keys(account.stats.operationLimits).length > 0)" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-top: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+          <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">今日操作限制</h3>
+          <span style="font-size: 12px; color: #94a3b8;">每日重置</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px;">
+          <!-- 数组格式（旧后端格式） -->
+          <template v-if="Array.isArray(account.stats.operationLimits)">
+            <div v-for="limit in account.stats.operationLimits" :key="limit.id" style="background: #f8fafc; border-radius: 10px; padding: 12px; text-align: center;" :style="{ borderLeft: (limit.expLeft <= 0 ? '3px solid #ef4444' : '3px solid #22c55e') }">
+              <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">{{ limit.name }}</div>
+              <div style="font-size: 18px; font-weight: 600;" :style="{ color: limit.expLeft <= 0 ? '#ef4444' : '#1e293b' }">
+                {{ limit.expLeft }}/{{ (limit as any).expLimit || limit.max }}
+              </div>
+              <div v-if="limit.expLeft <= 0" style="font-size: 10px; color: #ef4444; margin-top: 2px;">已达上限</div>
+            </div>
+          </template>
+          <!-- 对象格式（新后端格式） -->
+          <template v-else>
+            <div v-for="(limit, name) in account.stats.operationLimits" :key="name" style="background: #f8fafc; border-radius: 10px; padding: 12px; text-align: center;" :style="{ borderLeft: (limit.current >= limit.max ? '3px solid #ef4444' : '3px solid #22c55e') }">
+              <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">{{ getOperationLimitName(name) }}</div>
+              <div style="font-size: 18px; font-weight: 600;" :style="{ color: limit.current >= limit.max ? '#ef4444' : '#1e293b' }">
+                {{ limit.current }}/{{ limit.max }}
+              </div>
+              <div v-if="limit.current >= limit.max" style="font-size: 10px; color: #ef4444; margin-top: 2px;">已达上限</div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- 任务系统显示 -->
+      <div v-if="account.stats?.tasks" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-top: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+          <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">任务系统</h3>
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <span v-if="account.stats.tasks.claimable > 0" style="font-size: 12px; color: #22c55e; background: #dcfce7; padding: 4px 10px; border-radius: 10px; font-weight: 500;">{{ account.stats.tasks.claimable }} 个可领取</span>
+            <span style="font-size: 12px; color: #64748b;">共 {{ account.stats.tasks.total }} 个任务</span>
+          </div>
+        </div>
+        <div v-if="account.stats.tasks.list && account.stats.tasks.list.length > 0" style="display: flex; flex-direction: column; gap: 10px;">
+          <TaskCard 
+            v-for="task in account.stats.tasks.list" 
+            :key="task.id"
+            :name="(task as any).name || task.desc"
+            :progress="task.progress"
+            :total="task.total"
+            :reward="task.reward || (task.rewards ? task.rewards.map((r: {count: number}) => r.count).join('+') : '')"
+            :is-completed="task.isClaimed || task.is_claimed"
+            :is-claimable="task.progress >= task.total && !(task.isClaimed || task.is_claimed)"
+          />
+        </div>
+        <div v-else style="text-align: center; padding: 40px; color: #94a3b8; font-size: 14px;">
+          暂无任务数据
+        </div>
+      </div>
+
+      <!-- 操作限制显示 -->
+      <div v-if="account.stats?.operationLimits && Object.keys(account.stats.operationLimits).length > 0" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-top: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+          <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">今日操作限制</h3>
+          <span style="font-size: 12px; color: #94a3b8;">每日重置</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px;">
+          <div v-for="(limit, name) in account.stats.operationLimits" :key="name" style="background: #f8fafc; border-radius: 10px; padding: 12px; text-align: center;" :style="{ borderLeft: (limit.current >= limit.max ? '3px solid #ef4444' : '3px solid #22c55e') }">
+            <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">{{ getOperationLimitName(name as string) }}</div>
+            <div style="font-size: 18px; font-weight: 600;" :style="{ color: limit.current >= limit.max ? '#ef4444' : '#1e293b' }">
+              {{ limit.current }}/{{ limit.max }}
+            </div>
+            <div v-if="limit.current >= limit.max" style="font-size: 10px; color: #ef4444; margin-top: 2px;">已达上限</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 配置标签页 -->
+    <GlassCard
+      v-else-if="modelValue === 'config'"
+      title="农场操作"
+      icon="🌱"
+      :hover="true"
+    >
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px;">
+        <!-- 自动种植/收获 -->
+        <ConfigCard title="自动种植/收获">
+          <template #action>
+            <NeonCheckbox v-model="localConfig.autoFarm" />
+          </template>
+        </ConfigCard>
+
+        <!-- 随机种植时间间隔 -->
+        <ConfigCard title="随机种植时间间隔" subtitle="每块地种植后的随机延迟">
+          <template #action>
+            <span style="font-size: 11px; color: #22c55e; background: #f0fdf4; padding: 4px 10px; border-radius: 8px; font-weight: 500;">默认: 100~1000ms</span>
+          </template>
+          <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+                <span style="font-size: 12px; color: #64748b; white-space: nowrap;">最小</span>
+                <input
+                  type="number"
+                  v-model.number="localConfig.plantIntervalMin"
+                  :min="100"
+                  :max="20000"
+                  placeholder="100"
+                  style="
+                    flex: 1;
+                    padding: 8px 12px;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    text-align: center;
+                    background: #f8fafc;
+                  "
+                >
+                <span style="font-size: 12px; color: #64748b; white-space: nowrap;">ms</span>
+              </div>
+              <span style="color: #cbd5e1;">~</span>
+              <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+                <span style="font-size: 12px; color: #64748b; white-space: nowrap;">最大</span>
+                <input
+                  type="number"
+                  v-model.number="localConfig.plantIntervalMax"
+                  :min="100"
+                  :max="20000"
+                  placeholder="1000"
+                  style="
+                    flex: 1;
+                    padding: 8px 12px;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    text-align: center;
+                    background: #f8fafc;
+                  "
+                >
+                <span style="font-size: 12px; color: #64748b; white-space: nowrap;">ms</span>
+              </div>
+            </div>
+            <div style="font-size: 11px; color: #94a3b8;">
+              范围: 100ms ~ 20000ms，默认 100~1000ms，每种植一块地后会随机延迟指定时间再种下一块
+            </div>
+          </div>
+        </ConfigCard>
+
+        <!-- 自动解锁土地 -->
+        <ConfigCard title="自动解锁土地" subtitle="自动解锁新的土地">
+          <template #action>
+            <NeonCheckbox v-model="localConfig.autoUnlockLand" />
+          </template>
+        </ConfigCard>
+
+        <!-- 自动升级土地 -->
+        <ConfigCard title="自动升级土地" subtitle="自动升级土地等级">
+          <template #action>
+            <NeonCheckbox v-model="localConfig.autoUpgradeLand" />
+          </template>
+        </ConfigCard>
+
+        <!-- 自动卖果实 -->
+        <ConfigCard title="自动卖果实">
+          <template #action>
+            <NeonCheckbox v-model="localConfig.autoSell" />
+          </template>
+        </ConfigCard>
+
+        <!-- 自动施肥 -->
+        <ConfigCard title="自动施肥">
+          <template #action>
+            <NeonCheckbox v-model="localConfig.autoFertilize" />
+          </template>
+        </ConfigCard>
+      </div>
+
+      <!-- 奖励领取组 -->
+      <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0 0 16px 0;">奖励领取</h3>
+      
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px;">
+        <!-- 自动做任务 -->
+        <ConfigCard title="自动做任务">
+          <template #action>
+            <NeonCheckbox v-model="localConfig.autoTask" />
+          </template>
+        </ConfigCard>
+
+        <!-- 自动领取邮件奖励 -->
+        <ConfigCard title="自动领取邮件奖励" subtitle="自动领取邮件中的奖励">
+          <template #action>
+            <NeonCheckbox v-model="localConfig.autoClaimEmail" />
+          </template>
+        </ConfigCard>
+
+        <!-- 自动领取图鉴奖励 -->
+        <ConfigCard title="自动领取图鉴奖励" subtitle="自动领取图鉴完成奖励">
+          <template #action>
+            <NeonCheckbox v-model="localConfig.autoClaimIllustrated" />
+          </template>
+        </ConfigCard>
+
+        <!-- 自动领取免费礼包 -->
+        <ConfigCard title="自动领取免费礼包" subtitle="每小时自动领取免费礼包">
+          <template #action>
+            <NeonCheckbox v-model="localConfig.autoClaimFreeGifts" />
+          </template>
+        </ConfigCard>
+      </div>
+
+      <!-- 好友互动组 -->
+      <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0 0 16px 0;">好友互动</h3>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <!-- 好友功能总开关 -->
+        <ConfigCard title="好友巡查" subtitle="开启后可使用好友互动功能">
+          <template #action>
+            <NeonCheckbox v-model="localConfig.enableFriendCheck" />
+          </template>
+        </ConfigCard>
+
+        <!-- 提示：好友巡查关闭时 -->
+        <div v-if="!localConfig.enableFriendCheck" style="padding: 12px 16px; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1;">
+          <div style="display: flex; align-items: center; gap: 8px; color: #64748b; font-size: 13px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <span>开启「好友巡查」后可使用好友互动功能（偷菜、浇水、除草等）</span>
+          </div>
+        </div>
+
+        <!-- 好友互动功能开关组 -->
+        <div v-if="localConfig.enableFriendCheck" style="padding: 20px; background: #f0f9ff; border-radius: 16px; border: 1px solid #bae6fd;">
+          <div style="font-size: 14px; font-weight: 600; color: #0369a1; margin-bottom: 16px;">好友互动功能</div>
+          
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- 偷菜 -->
+            <ConfigCard title="偷菜" subtitle="推荐功能">
+              <template #action>
+                <NeonCheckbox v-model="localConfig.enableSteal" />
+              </template>
+            </ConfigCard>
+
+            <!-- 跳过白萝卜 -->
+            <ConfigCard title="跳过白萝卜" subtitle="防狗功能">
+              <template #action>
+                <NeonCheckbox v-model="localConfig.skipWhiteRadish" />
+              </template>
+            </ConfigCard>
+
+            <!-- 跳过指定作物 -->
+            <ConfigCard title="跳过指定作物" subtitle="多选功能">
+              <template #action>
+                <button
+                  @click="showCropSelector = true"
+                  style="
+                    padding: 6px 14px;
+                    font-size: 12px;
+                    font-weight: 500;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    background: white;
+                    color: #64748b;
+                    transition: all 0.2s ease;
+                  "
+                  onmouseover="this.style.borderColor='#3b82f6'; this.style.color='#3b82f6';"
+                  onmouseout="this.style.borderColor='#e2e8f0'; this.style.color='#64748b';"
+                >
+                  {{ (localConfig.skipCrops?.length || 0) > 0 ? `已选择 ${localConfig.skipCrops?.length || 0} 种` : '选择作物' }}
+                </button>
+              </template>
+              <!-- 已选择的作物标签 -->
+              <div v-if="(localConfig.skipCrops?.length || 0) > 0" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+                <span
+                  v-for="cropId in localConfig.skipCrops"
+                  :key="cropId"
+                  style="
+                    font-size: 11px;
+                    padding: 2px 8px;
+                    background: #fee2e2;
+                    color: #dc2626;
+                    border-radius: 10px;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                  "
+                >
+                  {{ getCropNameById(cropId) }}
+                  <span
+                    @click="removeSkipCrop(cropId)"
+                    style="cursor: pointer; font-weight: bold;"
+                  >×</span>
+                </span>
+              </div>
+            </ConfigCard>
+
+            <!-- 帮浇水 -->
+            <ConfigCard title="帮浇水">
+              <template #action>
+                <NeonCheckbox v-model="localConfig.enableHelpWater" />
+              </template>
+            </ConfigCard>
+
+            <!-- 帮除草 -->
+            <ConfigCard title="帮除草">
+              <template #action>
+                <NeonCheckbox v-model="localConfig.enableHelpWeed" />
+              </template>
+            </ConfigCard>
+
+            <!-- 帮除虫 -->
+            <ConfigCard title="帮除虫">
+              <template #action>
+                <NeonCheckbox v-model="localConfig.enableHelpBug" />
+              </template>
+            </ConfigCard>
+
+            <!-- 无经验不帮助 -->
+            <ConfigCard title="无经验不帮助" subtitle="经验达上限后自动暂停巡查">
+              <template #action>
+                <NeonCheckbox v-model="localConfig.helpOnlyWithExp" />
+              </template>
+            </ConfigCard>
+
+            <!-- 放虫 -->
+            <ConfigCard title="放虫" subtitle="慎用功能">
+              <template #action>
+                <NeonCheckbox v-model="localConfig.enablePutBug" />
+              </template>
+            </ConfigCard>
+
+            <!-- 放草 -->
+            <ConfigCard title="放草" subtitle="慎用功能">
+              <template #action>
+                <NeonCheckbox v-model="localConfig.enablePutWeed" />
+              </template>
+            </ConfigCard>
+
+            <!-- 白名单设置 -->
+            <div style="font-size: 14px; font-weight: 600; color: #0369a1; margin: 8px 0 12px 0;">白名单设置（GID列表）</div>
+            <div style="font-size: 12px; color: #64748b; margin-bottom: 12px;">填入好友GID，多个用逗号分隔，白名单内好友跳过对应互动</div>
+
+            <!-- 偷菜白名单 -->
+            <div v-if="localConfig.enableSteal" style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 13px; color: #1e293b;">偷菜白名单</span>
+              <input 
+                type="text" 
+                v-model="stealWhitelistInput"
+                @blur="updateStealWhitelist"
+                placeholder="例如: 123456, 789012"
+                style="padding: 8px 12px; border: 1px solid #bae6fd; border-radius: 8px; font-size: 13px; background: white;"
+              >
+            </div>
+
+            <!-- 浇水白名单 -->
+            <div v-if="localConfig.enableHelpWater" style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 13px; color: #1e293b;">浇水白名单</span>
+              <input 
+                type="text" 
+                v-model="helpWaterWhitelistInput"
+                @blur="updateHelpWaterWhitelist"
+                placeholder="例如: 123456, 789012"
+                style="padding: 8px 12px; border: 1px solid #bae6fd; border-radius: 8px; font-size: 13px; background: white;"
+              >
+            </div>
+
+            <!-- 除草白名单 -->
+            <div v-if="localConfig.enableHelpWeed" style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 13px; color: #1e293b;">除草白名单</span>
+              <input 
+                type="text" 
+                v-model="helpWeedWhitelistInput"
+                @blur="updateHelpWeedWhitelist"
+                placeholder="例如: 123456, 789012"
+                style="padding: 8px 12px; border: 1px solid #bae6fd; border-radius: 8px; font-size: 13px; background: white;"
+              >
+            </div>
+
+            <!-- 除虫白名单 -->
+            <div v-if="localConfig.enableHelpBug" style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 13px; color: #1e293b;">除虫白名单</span>
+              <input 
+                type="text" 
+                v-model="helpBugWhitelistInput"
+                @blur="updateHelpBugWhitelist"
+                placeholder="例如: 123456, 789012"
+                style="padding: 8px 12px; border: 1px solid #bae6fd; border-radius: 8px; font-size: 13px; background: white;"
+              >
+            </div>
+
+            <!-- 放虫白名单 -->
+            <div v-if="localConfig.enablePutBug" style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 13px; color: #1e293b;">放虫白名单</span>
+              <input 
+                type="text" 
+                v-model="putBugWhitelistInput"
+                @blur="updatePutBugWhitelist"
+                placeholder="例如: 123456, 789012"
+                style="padding: 8px 12px; border: 1px solid #bae6fd; border-radius: 8px; font-size: 13px; background: white;"
+              >
+            </div>
+
+            <!-- 放草白名单 -->
+            <div v-if="localConfig.enablePutWeed" style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 13px; color: #1e293b;">放草白名单</span>
+              <input 
+                type="text" 
+                v-model="putWeedWhitelistInput"
+                @blur="updatePutWeedWhitelist"
+                placeholder="例如: 123456, 789012"
+                style="padding: 8px 12px; border: 1px solid #bae6fd; border-radius: 8px; font-size: 13px; background: white;"
+              >
+            </div>
+          </div>
+        </div>
+
+        <!-- 使用有机肥 -->
+        <ConfigCard title="使用有机肥" subtitle="优先使用，不足时用普通肥">
+          <template #action>
+            <NeonCheckbox v-model="localConfig.useOrganicFertilizer" />
+          </template>
+        </ConfigCard>
+
+        <!-- 同时使用两种肥料 -->
+        <div v-if="localConfig.useOrganicFertilizer" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: #f0fdf4; border-radius: 12px; border: 1px solid #86efac;">
+          <div>
+            <span style="font-size: 15px; font-weight: 500; color: #166534;">同时使用普通肥和有机肥</span>
+            <span style="font-size: 12px; color: #22c55e; margin-left: 8px;">一株作物两种肥料都使用</span>
+          </div>
+          <NeonCheckbox v-model="localConfig.useBothFertilizers" />
+        </div>
+
+        <!-- 肥料自动补充设置 -->
+        <div v-if="localConfig.autoFertilize" style="display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; background: #fefce8; border-radius: 12px; border: 1px solid #fde047;">
+          <div style="font-size: 14px; font-weight: 500; color: #854d0e;">肥料自动补充设置</div>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <!-- 普通肥自动补充 -->
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 13px; color: #713f12;">普通肥自动补充</span>
+              <NeonCheckbox v-model="localConfig.autoRefillNormalFertilizer" />
+            </div>
+            <!-- 有机肥自动补充 -->
+            <div v-if="localConfig.useOrganicFertilizer" style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 13px; color: #713f12;">有机肥自动补充</span>
+              <NeonCheckbox v-model="localConfig.autoRefillOrganicFertilizer" />
+            </div>
+            <!-- 补充阈值设置 -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+              <span style="font-size: 13px; color: #713f12;">补充阈值（肥料≤{{ localConfig.fertilizerRefillThreshold || 100 }}时补充）</span>
+              <input
+                type="number"
+                v-model.number="localConfig.fertilizerRefillThreshold"
+                min="10"
+                max="1000"
+                style="width: 70px; padding: 6px 10px; border: 1px solid #fde047; border-radius: 6px; font-size: 13px; text-align: center;"
+              />
+            </div>
+            <div style="font-size: 11px; color: #a16207; margin-top: 4px;">
+              提示：优先使用大容量补充道具（12小时>8小时>4小时>1小时）
+            </div>
+          </div>
+        </div>
+
+        <!-- 防偷菜功能 -->
+        <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; background: #fef2f2; border-radius: 12px; border: 1px solid #fecaca;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 15px; font-weight: 500; color: #1e293b;">防偷菜功能</span>
+              <span style="font-size: 12px; color: #64748b;">作物成熟前自动使用有机肥加速并收获</span>
+            </div>
+            <NeonCheckbox v-model="localConfig.enableAntiSteal" />
+          </div>
+          
+          <!-- 防偷菜时间设置 -->
+          <div v-if="localConfig.enableAntiSteal" style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 13px; color: #713f12;">提前加速时间（秒）</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input
+                  type="number"
+                  v-model.number="localConfig.antiStealAdvanceTime"
+                  min="20"
+                  max="120"
+                  style="width: 70px; padding: 6px 10px; border: 1px solid #fecaca; border-radius: 6px; font-size: 13px; text-align: center;"
+                />
+                <span style="font-size: 12px; color: #64748b;">秒</span>
+              </div>
+            </div>
+            <div style="font-size: 11px; color: #dc2626; background: #fef2f2; padding: 8px 12px; border-radius: 6px; border: 1px dashed #fca5a5;">
+              <strong>⚠️ 重要提醒：</strong>请确保有机化肥剩余充足！当作物距离成熟还有设定时间时，会自动使用有机肥加速到成熟并立即收获，防止他人偷取。时间范围：20-120秒
+            </div>
+          </div>
+        </div>
+
+        <!-- 农场巡查间隔 -->
+        <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; background: #f8fafc; border-radius: 12px;">
+          <IntervalSlider
+            v-model="localFarmInterval"
+            :min="1"
+            :max="600"
+            :step="1"
+            label="农场巡查间隔"
+            unit="秒"
+            hint="设置农场巡查的时间间隔"
+          />
+        </div>
+
+        <!-- 好友巡查间隔 -->
+        <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; background: #f8fafc; border-radius: 12px;">
+          <IntervalSlider
+            v-model="localFriendInterval"
+            :min="1"
+            :max="600"
+            :step="1"
+            label="好友巡查间隔"
+            unit="秒"
+            hint="设置好友巡查的时间间隔"
+          />
+        </div>
+
+        <!-- 随机时间好友巡查 -->
+        <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; background: #f8fafc; border-radius: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 15px; font-weight: 500; color: #1e293b;">随机时间好友巡查</span>
+              <span style="font-size: 12px; color: #64748b;">开启后将在 5-300 秒之间随机选择间隔</span>
+            </div>
+            <NeonCheckbox v-model="localConfig.enableRandomFriendInterval" />
+          </div>
+        </div>
+
+        <!-- 邮件提醒设置 -->
+        <div style="padding: 16px 20px; background: #f8fafc; border-radius: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <span style="font-size: 15px; font-weight: 500; color: #1e293b;">邮件提醒</span>
+            <span style="font-size: 12px; color: #94a3b8;">账号离线时发送邮件</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input
+              v-model="localEmail"
+              type="email"
+              placeholder="输入接收提醒的邮箱地址"
+              style="flex: 1; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; color: #1e293b; background: white; box-sizing: border-box;"
+            />
+            <button
+              @click="testEmail"
+              :disabled="testingEmail || !localEmail"
+              style="
+                padding: 10px 16px;
+                background: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s;
+                white-space: nowrap;
+              "
+              :style="testingEmail || !account.email ? { opacity: 0.6, cursor: 'not-allowed' } : {}"
+              onmouseover="this.style.backgroundColor='#2563eb'"
+              onmouseout="this.style.backgroundColor='#3b82f6'"
+            >
+              {{ testingEmail ? '发送中...' : '测试' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 智能推荐种植 -->
+        <div style="padding: 16px 20px; background: #f0fdf4; border-radius: 12px; border: 1px solid #bbf7d0;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 15px; font-weight: 500; color: #1e293b;">智能推荐种植</span>
+              <span style="font-size: 12px; color: #64748b;">自动选择每小时经验最高的作物</span>
+              <span style="font-size: 11px; color: #94a3b8; margin-top: 2px;">提示：如需自己选择种子，请关闭此开关</span>
+            </div>
+            <NeonCheckbox v-model="localConfig.enableSmartPlant" />
+          </div>
+        </div>
+
+        <!-- 种子选择 -->
+        <div v-if="!localConfig.enableSmartPlant" style="padding: 16px 20px; background: #f8fafc; border-radius: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <span style="font-size: 15px; font-weight: 500; color: #1e293b;">种植种子</span>
+            <span v-if="selectedPlant" style="font-size: 13px; color: #22c55e; font-weight: 500;">
+              {{ selectedPlant.displayName }}
+            </span>
+          </div>
+          
+          <!-- 搜索框 -->
+          <div style="position: relative; margin-bottom: 8px;">
+            <input
+              v-model="plantSearchQuery"
+              type="text"
+              placeholder="搜索植物名称..."
+              style="width: 100%; padding: 10px 12px 10px 36px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; color: #1e293b; background: white; box-sizing: border-box;"
+            />
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%);">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </div>
+          
+          <!-- 植物列表 -->
+          <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
+            <div
+              v-for="plant in filteredPlants"
+              :key="plant.id"
+              @click="selectPlant(plant)"
+              :style="{
+                padding: '10px 12px',
+                cursor: 'pointer',
+                borderBottom: '1px solid #f1f5f9',
+                backgroundColor: localConfig.seedType === plant.displayName ? '#eff6ff' : 'white',
+                transition: 'all 0.2s'
+              }"
+              onmouseover="this.style.backgroundColor='#f8fafc'"
+              onmouseout="this.style.backgroundColor=this.style.backgroundColor==='#eff6ff'?'#eff6ff':'white'"
+            >
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 14px; color: #1e293b; font-weight: 500;">{{ plant.name }}</span>
+                <span style="font-size: 12px; color: #64748b;">{{ plant.growTime }}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
+                <span style="font-size: 11px; color: #94a3b8;">Lv{{ plant.levelNeed }}</span>
+                <span style="font-size: 11px; color: #94a3b8;">{{ plant.exp }}经验</span>
+              </div>
+            </div>
+            <div v-if="filteredPlants.length === 0" style="padding: 20px; text-align: center; color: #94a3b8; font-size: 14px;">
+              未找到匹配的植物
+            </div>
+          </div>
+        </div>
+
+        <!-- 保存按钮 -->
+        <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+          <button 
+            @click="saveConfig"
+            style="padding: 12px 32px; background: #3b82f6; color: white; font-size: 15px; font-weight: 600; border: none; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);"
+            onmouseover="this.style.backgroundColor='#2563eb'; this.style.transform='translateY(-1px)';"
+            onmouseout="this.style.backgroundColor='#3b82f6'; this.style.transform='translateY(0)';"
+          >
+            保存配置
+          </button>
+        </div>
+      </div>
+    </GlassCard>
+
+    <!-- 土地标签页 -->
+    <div v-else-if="modelValue === 'land'" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div class="land-header">
+        <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0; white-space: nowrap;">土地状况 ({{ landData.length }}块)</h3>
+        <div class="land-controls">
+          <!-- 土地等级统计 -->
+          <div class="land-level-stats">
+            <div v-for="(count, level) in landLevelStats" :key="level" class="land-level-tag">
+              <span :style="{ color: getLandLevelColor(Number(level)) }">{{ getLandLevelName(Number(level)) }}</span>
+              <span style="font-weight: 600; color: #1e293b;">{{ count }}块</span>
+            </div>
+          </div>
+          <!-- 手动种植按钮 -->
+          <button
+            v-if="!plantSelectMode && !harvestSelectMode"
+            @click="plantSelectMode = true"
+            style="
+              padding: 6px 12px;
+              background: #dcfce7;
+              color: #16a34a;
+              border: 1px solid #86efac;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            "
+          >
+            手动种植 ({{ emptyLandsCount }})
+          </button>
+          <!-- 手动收获按钮 -->
+          <button
+            v-if="!harvestSelectMode && !plantSelectMode"
+            @click="harvestSelectMode = true"
+            style="
+              padding: 6px 12px;
+              background: #fef3c7;
+              color: #d97706;
+              border: 1px solid #fcd34d;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            "
+          >
+            手动收获 ({{ matureLandsCount }})
+          </button>
+          <!-- 退出收获选择模式按钮 -->
+          <button
+            v-if="harvestSelectMode"
+            @click="cancelHarvestSelect"
+            style="
+              padding: 6px 12px;
+              background: #f1f5f9;
+              color: #64748b;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            "
+          >
+            取消
+          </button>
+          <!-- 收获选中按钮 -->
+          <button
+            v-if="harvestSelectMode && selectedLands.size > 0"
+            @click="handleHarvestSelected"
+            :disabled="harvestingLands"
+            style="
+              padding: 6px 12px;
+              background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+              color: white;
+              border: none;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              display: flex;
+              align-items: center;
+              gap: 4px;
+            "
+            :style="harvestingLands ? 'opacity: 0.6; cursor: not-allowed;' : ''"
+          >
+            <span v-if="harvestingLands">收获中...</span>
+            <span v-else>收获选中 ({{ selectedLands.size }})</span>
+          </button>
+          <!-- 全选成熟土地按钮 -->
+          <button
+            v-if="harvestSelectMode"
+            @click="toggleSelectAllMature"
+            style="
+              padding: 6px 12px;
+              background: #eff6ff;
+              color: #3b82f6;
+              border: 1px solid #bfdbfe;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            "
+          >
+            {{ isAllMatureSelected ? '取消全选' : '全选成熟' }}
+          </button>
+          <!-- 退出种植选择模式按钮 -->
+          <button
+            v-if="plantSelectMode"
+            @click="cancelPlantSelect"
+            style="
+              padding: 6px 12px;
+              background: #f1f5f9;
+              color: #64748b;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            "
+          >
+            取消
+          </button>
+          <!-- 种子选择下拉框 -->
+          <select
+            v-if="plantSelectMode"
+            v-model="selectedSeedId"
+            style="
+              padding: 6px 12px;
+              background: white;
+              color: #1e293b;
+              border: 1px solid #86efac;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              min-width: 150px;
+            "
+          >
+            <option value="">选择种子</option>
+            <option v-for="plant in plants" :key="plant.seedId" :value="plant.seedId">
+              {{ plant.name }} ({{ plant.growTime }})
+            </option>
+          </select>
+          <!-- 种植选中按钮 -->
+          <button
+            v-if="plantSelectMode && selectedLandsForPlant.size > 0 && selectedSeedId"
+            @click="handlePlantSelected"
+            :disabled="plantingLands"
+            style="
+              padding: 6px 12px;
+              background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+              color: white;
+              border: none;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              display: flex;
+              align-items: center;
+              gap: 4px;
+            "
+            :style="plantingLands ? 'opacity: 0.6; cursor: not-allowed;' : ''"
+          >
+            <span v-if="plantingLands">种植中...</span>
+            <span v-else>种植选中 ({{ selectedLandsForPlant.size }})</span>
+          </button>
+          <!-- 全选空闲土地按钮 -->
+          <button
+            v-if="plantSelectMode"
+            @click="toggleSelectAllEmpty"
+            style="
+              padding: 6px 12px;
+              background: #dcfce7;
+              color: #16a34a;
+              border: 1px solid #86efac;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            "
+          >
+            {{ isAllEmptySelected ? '取消全选' : '全选空闲' }}
+          </button>
+        </div>
+      </div>
+      
+      <!-- 收获选择模式提示 -->
+      <div v-if="harvestSelectMode" style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <div style="font-size: 13px; color: #92400e; line-height: 1.5;">
+          <div>点击成熟的土地进行选择，选中后点击"收获选中"按钮</div>
+          <div style="font-size: 12px; color: #b45309; margin-top: 4px;">提示：由于屏幕刷新有延迟，操作后可能无法立即看到变化，可前往日志页面查看实时执行情况</div>
+        </div>
+      </div>
+      <!-- 种植选择模式提示 -->
+      <div v-if="plantSelectMode" style="background: #dcfce7; border: 1px solid #86efac; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <div style="font-size: 13px; color: #166534; line-height: 1.5;">
+          <div>先选择种子，然后点击空闲的土地进行选择，选中后点击"种植选中"按钮</div>
+          <div style="font-size: 12px; color: #15803d; margin-top: 4px;">提示：由于屏幕刷新有延迟，操作后可能无法立即看到变化，可前往日志页面查看实时执行情况</div>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; padding: 4px;">
+        <div
+          v-for="(land, index) in landData"
+          :key="index"
+          class="land-cell"
+          :class="{
+            'land-locked': land.status === '锁定',
+            'land-empty': land.status === '空闲',
+            'land-growing': land.status === '生长中',
+            'land-mature': isLandMature(land),
+            'land-withered': land.status === '枯萎',
+            'land-stealable': land.stealable,
+            'land-selected': (harvestSelectMode && selectedLands.has(index)) || (plantSelectMode && selectedLandsForPlant.has(index)),
+            'land-selectable': (harvestSelectMode && isLandMature(land)) || (plantSelectMode && land.status === '空闲'),
+            [`land-type-${land.landLevel || 1}`]: true
+          }"
+          :style="((harvestSelectMode && isLandMature(land)) || (plantSelectMode && land.status === '空闲')) ? 'cursor: pointer;' : ''"
+          @click="handleLandClick(index, land)"
+          :title="`土地#${index + 1} - ${land.cropName || '空闲'} - ${land.growthStage || land.status}${land.stealable ? ' - 可偷!' : ''}${(land.totalProgress || 0) > 0 ? ' - 总进度:' + land.totalProgress + '%' : ''}${land.nextPhaseTime ? ' - 下一阶段:' + formatTime(land.nextPhaseTime) : ''}`"
+        >
+          <!-- 收获选择标记 -->
+          <div v-if="harvestSelectMode && isLandMature(land)" style="position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #f59e0b; background: selectedLands.has(index) ? '#f59e0b' : 'white'; display: flex; align-items: center; justify-content: center; z-index: 10;">
+            <svg v-if="selectedLands.has(index)" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <!-- 种植选择标记 -->
+          <div v-if="plantSelectMode && land.status === '空闲'" style="position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #22c55e; background: selectedLandsForPlant.has(index) ? '#22c55e' : 'white'; display: flex; align-items: center; justify-content: center; z-index: 10;">
+            <svg v-if="selectedLandsForPlant.has(index)" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <!-- 可偷标记 -->
+          <div v-if="land.stealable" class="land-stealable-badge">可偷</div>
+          <!-- 作物图片 -->
+          <div class="land-crop-image-container">
+            <img 
+              v-if="land.cropName && getCropImageUrl(land.cropName)" 
+              :src="getCropImageUrl(land.cropName)" 
+              :alt="land.cropName"
+              class="land-crop-image"
+              @error="handleImageError($event)"
+            />
+            <div v-else class="land-phase-icon" :style="{ color: land.phaseConfig?.color }">{{ land.phaseConfig?.icon }}</div>
+          </div>
+          <!-- 作物名称 -->
+          <div class="land-crop-name">{{ land.cropName || '-' }}</div>
+          <!-- 生长阶段 -->
+          <div class="land-growth-stage" :style="{ color: land.phaseConfig?.color }">{{ land.phaseConfig?.name || land.growthStage || land.status }}</div>
+
+          <!-- 整体进度条（从种植到成熟的总进度） -->
+          <div v-if="(land.totalProgress || 0) > 0" class="land-total-progress-bar" :title="`整体进度: ${land.totalProgress}%`">
+            <div class="land-total-progress-fill" :style="{ width: (land.totalProgress || 0) + '%' }"></div>
+            <span class="land-total-progress-text">{{ land.totalProgress }}%</span>
+          </div>
+
+          <!-- 预计成熟时间 -->
+          <div v-if="(land.matureTime || 0) > 0" class="land-mature-time">
+            预计 {{ formatMatureTime(land.matureTime || 0) }}
+          </div>
+
+          <!-- 当前阶段进度条（生长中状态） -->
+          <div v-if="land.progress && land.progress > 0 && land.phase >= 1 && land.phase <= 5" class="land-progress-bar">
+            <div class="land-progress-fill" :style="{ width: land.progress + '%', background: land.phaseConfig?.color }"></div>
+          </div>
+          <!-- 到下一阶段剩余时间 -->
+          <div v-if="land.nextPhaseTime && land.nextPhaseTime > 0" class="land-next-phase">
+            {{ formatTime(land.nextPhaseTime) }}
+          </div>
+          <!-- 土地等级标签（左上角） -->
+          <div v-if="land.landLevel && land.landLevel > 0" class="land-level-badge" :class="[`land-level-badge-${land.landLevel}`, { 'can-upgrade': land.couldUpgrade }]">
+            {{ land.landLevel === 1 ? '普通' : land.landLevel === 2 ? '红土' : land.landLevel === 3 ? '黑土' : land.landLevel === 4 ? '金土' : 'Lv' + land.landLevel }}
+            <span v-if="land.couldUpgrade" class="upgrade-icon">↑</span>
+          </div>
+          <!-- Buff图标 -->
+          <div v-if="land.buff && (land.buff.yieldBonus > 0 || land.buff.timeReduction > 0 || land.buff.expBonus > 0)" class="land-buff">
+            <span v-if="land.buff.yieldBonus > 0" title="产量加成">📈</span>
+            <span v-if="land.buff.timeReduction > 0" title="时间减少">⏱️</span>
+            <span v-if="land.buff.expBonus > 0" title="经验加成">⭐</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 背包标签页 -->
+    <div v-else-if="modelValue === 'bag'" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="font-size: 18px; font-weight: 600; color: #1e293b; margin: 0;">背包仓库</h3>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span v-if="bagList.length > 0" style="font-size: 14px; color: #64748b;">共 {{ bagList.length }} 种物品</span>
+          <span v-if="fruitCount > 0" style="font-size: 14px; color: #22c55e; font-weight: 500;">{{ fruitCount }} 个果实可出售</span>
+          <!-- 选择模式切换按钮 -->
+          <button
+            v-if="fruitItems.length > 0 && !selectMode"
+            @click="selectMode = true"
+            style="
+              padding: 8px 16px;
+              background: #f0fdf4;
+              color: #16a34a;
+              border: 1px solid #86efac;
+              border-radius: 8px;
+              font-size: 14px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            "
+          >
+            选择售卖
+          </button>
+          <!-- 退出选择模式按钮 -->
+          <button
+            v-if="selectMode"
+            @click="cancelSelect"
+            style="
+              padding: 8px 16px;
+              background: #f1f5f9;
+              color: #64748b;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              font-size: 14px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            "
+          >
+            取消
+          </button>
+          <!-- 售卖选中按钮 -->
+          <button
+            v-if="selectMode && selectedFruits.size > 0"
+            @click="handleSellSelectedFruits"
+            :disabled="sellingFruits"
+            style="
+              padding: 8px 16px;
+              background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+              color: white;
+              border: none;
+              border-radius: 8px;
+              font-size: 14px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              display: flex;
+              align-items: center;
+              gap: 6px;
+            "
+            :style="sellingFruits ? 'opacity: 0.6; cursor: not-allowed;' : ''"
+          >
+            <svg v-if="!sellingFruits" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;">
+              <line x1="12" y1="2" x2="12" y2="6"></line>
+              <line x1="12" y1="18" x2="12" y2="22"></line>
+              <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+              <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+              <line x1="2" y1="12" x2="6" y2="12"></line>
+              <line x1="18" y1="12" x2="22" y2="12"></line>
+              <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+              <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+            </svg>
+            {{ sellingFruits ? '售卖中...' : `售卖选中 (${selectedFruits.size})` }}
+          </button>
+          <!-- 全选按钮 -->
+          <button
+            v-if="selectMode"
+            @click="toggleSelectAll"
+            style="
+              padding: 8px 16px;
+              background: #eff6ff;
+              color: #3b82f6;
+              border: 1px solid #bfdbfe;
+              border-radius: 8px;
+              font-size: 14px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            "
+          >
+            {{ isAllSelected ? '取消全选' : '全选' }}
+          </button>
+        </div>
+      </div>
+      
+      <!-- 选择模式提示 -->
+      <div v-if="selectMode" style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span style="font-size: 14px; color: #166534;">点击果实进行选择，选中后点击"售卖选中"按钮</span>
+      </div>
+
+      <div v-if="bagList.length === 0" style="text-align: center; padding: 60px; color: #94a3b8;">
+        <div style="width: 80px; height: 80px; margin: 0 auto 20px; color: #cbd5e1;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+          </svg>
+        </div>
+        <p style="font-size: 14px; margin: 0;">背包为空</p>
+        <p style="font-size: 12px; color: #94a3b8; margin-top: 8px;">等待数据同步...</p>
+      </div>
+
+      <!-- 特殊物品分组 -->
+      <div v-if="specialItems.length > 0" style="margin-bottom: 24px;">
+        <h4 style="font-size: 14px; font-weight: 600; color: #64748b; margin: 0 0 12px 0; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">特殊物品</h4>
+        <div class="bag-grid">
+          <BagItemCard
+            v-for="item in specialItems"
+            :key="item.id"
+            :name="getItemDisplayName(item.id, item.count)"
+            :count="item.count"
+            :icon="getItemIcon(item.id)"
+            :emoji="getItemIconEmoji(item.id)"
+            :time-info="getContainerTimeInfo(item.id, item.count)"
+            variant="special"
+            @image-error="handleImageError"
+          />
+        </div>
+      </div>
+
+      <!-- 作物分组 -->
+      <div v-if="fruitItems.length > 0">
+        <h4 style="font-size: 14px; font-weight: 600; color: #64748b; margin: 0 0 12px 0; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">作物果实</h4>
+        <div class="bag-grid">
+          <BagItemCard
+            v-for="item in fruitItems"
+            :key="item.uid || item.id"
+            :name="getItemDisplayName(item.id, item.count)"
+            :count="item.count"
+            :icon="getItemIcon(item.id)"
+            :emoji="getItemIconEmoji(item.id)"
+            :selected="selectedFruits.has(item.uid || item.id)"
+            :selectable="selectMode"
+            :show-sellable="!selectMode"
+            variant="fruit"
+            @click="selectMode && toggleSelect(item)"
+            @image-error="handleImageError"
+          />
+        </div>
+      </div>
+
+      <!-- 其他物品分组 -->
+      <div v-if="otherItems.length > 0" style="margin-top: 24px;">
+        <h4 style="font-size: 14px; font-weight: 600; color: #64748b; margin: 0 0 12px 0; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">其他物品</h4>
+        <div class="bag-grid">
+          <BagItemCard
+            v-for="item in otherItems"
+            :key="item.id"
+            :name="getItemDisplayName(item.id, item.count)"
+            :count="item.count"
+            :icon="getItemIcon(item.id)"
+            :emoji="getItemIconEmoji(item.id)"
+            variant="other"
+            @image-error="handleImageError"
+          />
+        </div>
+      </div>
+
+      <!-- 背包统计 -->
+      <div v-if="bagList.length > 0" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+          <div style="text-align: center; padding: 16px; background: #f8fafc; border-radius: 12px;">
+            <div style="font-size: 24px; font-weight: 600; color: #3b82f6;">{{ bagList.length }}</div>
+            <div style="font-size: 12px; color: #64748b; margin-top: 4px;">物品种类</div>
+          </div>
+          <div style="text-align: center; padding: 16px; background: #f0fdf4; border-radius: 12px;">
+            <div style="font-size: 24px; font-weight: 600; color: #22c55e;">{{ fruitCount }}</div>
+            <div style="font-size: 12px; color: #64748b; margin-top: 4px;">果实数量</div>
+          </div>
+          <div style="text-align: center; padding: 16px; background: #fef3c7; border-radius: 12px;">
+            <div style="font-size: 24px; font-weight: 600; color: #d97706;">{{ totalItemCount }}</div>
+            <div style="font-size: 12px; color: #64748b; margin-top: 4px;">总数量</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 排行标签页 (fixed) -->
+    <div v-else-if="modelValue === 'ranking'">
+      <PlantRanking
+        :preferred-seed-type="account.config?.seedType"
+        :can-set-preference="!localConfig.enableSmartPlant"
+        :user-level="account.level"
+        @set-preference="onSetSeedPreference"
+      />
+    </div>
+
+    <!-- 日志标签页 -->
+    <div v-else-if="modelValue === 'log'" class="log-page">
+      <!-- 日志头部 -->
+      <div class="log-header">
+        <div class="log-title-section">
+          <h3 class="log-title">📋 运行日志</h3>
+          <label class="auto-scroll-label">
+            <input type="checkbox" v-model="autoScroll" class="auto-scroll-checkbox">
+            <span>自动滚动</span>
+          </label>
+        </div>
+        <div class="log-actions">
+          <button v-if="filteredLogs.length > 0" @click="scrollToBottom" class="log-btn log-btn-primary">
+            ⬇️ 滚动到底部
+          </button>
+          <button v-if="filteredLogs.length > 0" @click="clearLogs" class="log-btn log-btn-danger">
+            🗑️ 清空日志
+          </button>
+        </div>
+      </div>
+
+      <!-- 筛选栏 -->
+      <div class="log-filters">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label class="filter-label">模块</label>
+            <select v-model="logFilter.module" class="filter-select">
+              <option value="">全部模块</option>
+              <option v-for="(config, key) in moduleConfig" :key="key" :value="key">
+                {{ config.icon }} {{ config.label }}
+              </option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">级别</label>
+            <select v-model="logFilter.level" class="filter-select">
+              <option value="">全部级别</option>
+              <option v-for="(config, key) in levelConfig" :key="key" :value="key">
+                {{ config.label }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="filter-row">
+          <div class="filter-group filter-group-full">
+            <label class="filter-label">关键词（空格分词）</label>
+            <input 
+              v-model="logFilter.keyword" 
+              type="text" 
+              class="filter-input" 
+              placeholder="输入关键词搜索日志..."
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- 日志列表 -->
+      <div ref="logContainer" class="log-container">
+        <div v-if="filteredLogs.length === 0" class="log-empty">
+          <div class="log-empty-icon">📋</div>
+          <div class="log-empty-text">{{ logs.length === 0 ? '暂无日志' : '没有匹配的日志' }}</div>
+          <div v-if="logs.length > 0 && filteredLogs.length === 0" class="log-empty-hint">请调整筛选条件</div>
+        </div>
+        <div v-else class="log-list">
+          <LogItem 
+            v-for="log in filteredLogs" 
+            :key="log.id || log.time"
+            :time="log.time || log.split(']')[0].replace('[', '')"
+            :module="log.module"
+            :module-icon="log.module ? getModuleIcon(log.module) : ''"
+            :module-label="log.module ? getModuleLabel(log.module) : ''"
+            :level="log.level || 'info'"
+            :level-label="log.level ? getLevelLabel(log.level) : '信息'"
+            :message="log.message || log"
+          />
+        </div>
+      </div>
+
+      <!-- 日志统计 -->
+      <div v-if="logs.length > 0" class="log-stats">
+        <span class="log-stat">共 {{ logs.length }} 条日志</span>
+        <span v-if="filteredLogs.length !== logs.length" class="log-stat">显示 {{ filteredLogs.length }} 条</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 作物选择弹窗 -->
+  <div v-if="showCropSelector" style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  " @click.self="showCropSelector = false">
+    <div style="
+      background: white;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    ">
+      <!-- 弹窗头部 -->
+      <div style="
+        padding: 20px 24px;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      ">
+        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #1e293b;">选择要跳过的作物</h3>
+        <button
+          @click="showCropSelector = false"
+          style="
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: all 0.2s;
+          "
+          onmouseover="this.style.background='#f1f5f9'; this.style.color='#64748b';"
+          onmouseout="this.style.background='transparent'; this.style.color='#94a3b8';"
+        >×</button>
+      </div>
+
+      <!-- 搜索框 -->
+      <div style="padding: 16px 24px; border-bottom: 1px solid #e2e8f0;">
+        <input
+          v-model="cropSearchQuery"
+          type="text"
+          placeholder="搜索作物名称..."
+          style="
+            width: 100%;
+            padding: 10px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s;
+          "
+          onfocus="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 3px rgba(59, 130, 246, 0.1)';"
+          onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';"
+        >
+      </div>
+
+      <!-- 作物列表 -->
+      <div style="
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 24px;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      ">
+        <div
+          v-for="crop in filteredCrops"
+          :key="crop.id"
+          @click="toggleCropSelection(crop.id)"
+          :style="{
+            padding: '12px 16px',
+            borderRadius: '10px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            transition: 'all 0.2s',
+            background: localConfig.skipCrops?.includes(crop.id) ? '#eff6ff' : '#f8fafc',
+            border: localConfig.skipCrops?.includes(crop.id) ? '2px solid #3b82f6' : '2px solid transparent'
+          }"
+          onmouseover="this.style.background=this.style.background==='rgb(239, 246, 255)'?'#dbeafe':'#f1f5f9';"
+          onmouseout="this.style.background=this.style.background==='rgb(219, 234, 254)'?'#eff6ff':'#f8fafc';"
+        >
+          <span style="font-size: 14px; color: #1e293b; font-weight: 500;">{{ crop.name }}</span>
+          <span
+            v-if="localConfig.skipCrops?.includes(crop.id)"
+            style="
+              width: 20px;
+              height: 20px;
+              background: #3b82f6;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+              font-size: 12px;
+            "
+          >✓</span>
+        </div>
+      </div>
+
+      <!-- 弹窗底部 -->
+      <div style="
+        padding: 16px 24px;
+        border-top: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      ">
+        <span style="font-size: 14px; color: #64748b;">
+          已选择 {{ localConfig.skipCrops?.length || 0 }} 种作物
+        </span>
+        <div style="display: flex; gap: 12px;">
+          <button
+            @click="localConfig.skipCrops = []"
+            style="
+              padding: 8px 16px;
+              font-size: 14px;
+              font-weight: 500;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              cursor: pointer;
+              background: white;
+              color: #64748b;
+              transition: all 0.2s;
+            "
+            onmouseover="this.style.borderColor='#cbd5e1'; this.style.color='#475569';"
+            onmouseout="this.style.borderColor='#e2e8f0'; this.style.color='#64748b';"
+          >清空</button>
+          <button
+            @click="showCropSelector = false"
+            style="
+              padding: 8px 20px;
+              font-size: 14px;
+              font-weight: 500;
+              border: none;
+              border-radius: 8px;
+              cursor: pointer;
+              background: #3b82f6;
+              color: white;
+              transition: all 0.2s;
+            "
+            onmouseover="this.style.background='#2563eb';"
+            onmouseout="this.style.background='#3b82f6';"
+          >确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, ref, watch, nextTick, onMounted } from 'vue';
+import axios from 'axios';
+import roleLevelData from '../../../gameConfig/RoleLevel.json';
+import PlantRanking from './PlantRanking.vue';
+import NeonCheckbox from './NeonCheckbox.vue';
+import VolumeSlider from './VolumeSlider.vue';
+import IntervalSlider from './IntervalSlider.vue';
+import Card3D from './Card3D.vue';
+import StatCard from './StatCard.vue';
+import TaskCard from './TaskCard.vue';
+import HoloToggle from './HoloToggle.vue';
+import LogItem from './LogItem.vue';
+import ReloginButton from './ReloginButton.vue';
+import ConfigCard from './ConfigCard.vue';
+import GlassCard from './GlassCard.vue';
+import BagItemCard from './BagItemCard.vue';
+import { getItemIcon, getItemIconEmoji, getItemDisplayName, getItemCategory, getCategoryOrder, getCropImageUrl, getContainerTimeInfo } from '../services/itemService';
+
+const logContainer = ref<HTMLElement | null>(null);
+
+// 自动滚动开关（默认关闭）
+const autoScroll = ref(false);
+
+// 统计区域 Tab 切换状态
+const statsTab = ref<'session' | 'daily'>('session');
+
+// API基础URL
+// 使用相对路径，自动适配当前域名
+const API_BASE_URL = '/api';
+
+// 植物数据
+const plants = ref<Array<{
+  id: number;
+  name: string;
+  seedId: number;
+  levelNeed: number;
+  exp: number;
+  growTime: string;
+  growPhases: string;
+  displayName: string;
+}>>([]);
+
+// 搜索查询
+const plantSearchQuery = ref('');
+
+// 过滤后的植物列表
+const filteredPlants = computed(() => {
+  if (!plantSearchQuery.value.trim()) {
+    return plants.value;
+  }
+  const query = plantSearchQuery.value.toLowerCase();
+  return plants.value.filter(plant => 
+    plant.name.toLowerCase().includes(query)
+  );
+});
+
+// 当前选中的植物
+const selectedPlant = computed(() => {
+  return plants.value.find(p => p.displayName === localConfig.value.seedType);
+});
+
+// 加载植物列表
+async function loadPlants() {
+  try {
+    const level = getCurrentLevel();
+    const response = await axios.get(`${API_BASE_URL}/plants?level=${level}`);
+    if (response.data.success) {
+      plants.value = response.data.plants;
+
+      // 如果没有选中任何植物，默认选择第一个
+      if (!localConfig.value.seedType && plants.value.length > 0 && plants.value[0]) {
+        localConfig.value.seedType = plants.value[0].displayName;
+      }
+    }
+  } catch (error) {
+    console.error('加载植物列表失败:', error);
+  }
+}
+
+// 选择植物
+function selectPlant(plant: typeof plants.value[0]) {
+  localConfig.value.seedType = plant.displayName;
+}
+
+// 处理图片加载错误
+function handleImageError(event: Event) {
+  const target = event.target as HTMLImageElement;
+  if (target) {
+    target.style.display = 'none';
+  }
+}
+
+// 配置类型定义
+interface AccountConfig {
+  autoFarm: boolean;
+  autoFriend: boolean;
+  autoTask: boolean;
+  autoSell: boolean;
+  autoFertilize: boolean;
+  useOrganicFertilizer: boolean;
+  useBothFertilizers?: boolean;
+  seedType: string;
+  minCropLevel: number;
+  // 好友功能开关
+  enableFriendCheck: boolean;
+  enableSteal: boolean;
+  enableHelpWater: boolean;
+  enableHelpWeed: boolean;
+  enableHelpBug: boolean;
+  enablePutBug: boolean;
+  enablePutWeed: boolean;
+  // 智能功能
+  helpOnlyWithExp?: boolean;
+  enableSmartPlant?: boolean;
+  // 跳过白萝卜
+  skipWhiteRadish?: boolean;
+  // 跳过的作物列表
+  skipCrops?: number[];
+  // 土地管理
+  autoUnlockLand?: boolean;
+  autoUpgradeLand?: boolean;
+  // 奖励自动领取
+  autoClaimEmail?: boolean;
+  autoClaimIllustrated?: boolean;
+  autoClaimFreeGifts?: boolean;
+  // 肥料补充
+  autoRefillNormalFertilizer?: boolean;
+  autoRefillOrganicFertilizer?: boolean;
+  fertilizerRefillThreshold?: number;
+  // 白名单
+  stealWhitelist: number[];
+  helpWaterWhitelist: number[];
+  helpWeedWhitelist: number[];
+  helpBugWhitelist: number[];
+  putBugWhitelist: number[];
+  putWeedWhitelist: number[];
+  // 随机时间好友巡查
+  enableRandomFriendInterval: boolean;
+  // 随机种植时间间隔
+  plantIntervalMin?: number;
+  plantIntervalMax?: number;
+  // 防偷菜功能
+  enableAntiSteal?: boolean;
+  antiStealAdvanceTime?: number;
+}
+
+// 账号类型定义
+interface Account {
+  id: string;
+  name: string;
+  level: number;
+  status: 'online' | 'offline';
+  platform: 'qq' | 'wx';
+  code: string;
+  email: string;
+  farmInterval: number;
+  friendInterval: number;
+  isRunning?: boolean;
+  config: AccountConfig;
+  stats: {
+    exp: number;
+    coins: number;
+    // 本次登录统计（本次会话累计）
+    sessionStats: {
+      exp: number;
+      harvest: number;
+      steal: number;
+      water: number;
+      weed: number;
+      bug: number;
+      sell: number;
+      onlineTime: number;
+    };
+    // 今日累计统计（全天累计）
+    todayStats: {
+      exp: number;
+      harvest: number;
+      steal: number;
+      water: number;
+      weed: number;
+      bug: number;
+      sell: number;
+    };
+    landStatus: Array<{
+      status: string;
+      phase: number;
+      phaseName: string;
+      plantName?: string;
+      progress?: number;
+      totalProgress?: number;
+      nextPhaseTime?: number;
+      matureTime?: number;
+      landLevel?: number;
+      landMaxLevel?: number;
+      couldUpgrade?: boolean;
+      stealable?: boolean;
+      buff?: {
+        yieldBonus: number;
+        timeReduction: number;
+        expBonus: number;
+      } | null;
+    } | string>;
+    // 操作限制
+    operationLimits?: Record<string, { current: number; max: number }> | Array<{ id: number; name: string; current: number; max: number; expLeft: number }>;
+    // 任务
+    tasks?: {
+      total: number;
+      claimable: number;
+      list: Array<{
+        id: number;
+        desc: string;
+        progress: number;
+        total: number;
+        isClaimed?: boolean;
+        is_claimed?: boolean;
+        reward?: string;
+        rewards?: Array<{ id: number; count: number }>;
+      }>;
+    };
+    // 背包
+    bag?: Array<{ id: number; count: number; name?: string; uid?: number }>;
+  };
+  friends?: {
+    gid: number;
+    name: string;
+    remark: string;
+    level: number;
+    avatar: string;
+    plant: {
+      stealNum: number;
+      dryNum: number;
+      weedNum: number;
+      insectNum: number;
+    } | null;
+    lands?: {
+      id: number;
+      status: string;
+      plantName: string;
+      phase: string;
+      stealable: boolean;
+      dry: boolean;
+      weed: number;
+      bug: number;
+    }[];
+    lastVisitTime?: number;
+  }[];
+  // 每日累计统计（多次登录累加）
+  dailyStats?: {
+    totalOnlineTime: number;  // 累计在线时间（分钟）
+    totalExpGained: number;   // 累计获得经验
+    totalHarvest: number;     // 累计收获
+    totalSteal: number;       // 累计偷菜
+    totalWeed: number;        // 累计除草
+    totalBug: number;         // 累计除虫
+    totalWater: number;       // 累计浇水
+  } | null;
+}
+
+// Props
+const props = defineProps<{
+  account: Account;
+  logs: string[];
+  modelValue: string;
+}>();
+
+// Emits
+const emit = defineEmits<{
+  'update:modelValue': [value: string];
+  'save-config': [config: any];
+  'toggle-script': [];
+  'relogin': [];
+  'refresh-account': [accountId: string];
+  'clear-logs': [];
+  'refresh-data': [];
+}>();
+
+// 脚本运行状态
+const isRunning = computed(() => props.account.isRunning || false);
+
+// 本地配置状态（避免直接修改 prop，防止定时刷新时重置输入）
+// 合并默认值，确保新属性有初始值
+const localConfig = ref<AccountConfig>({
+  ...props.account.config,
+  // 自动售卖果实（默认关闭）
+  autoSell: props.account.config?.autoSell === true,
+  // 好友功能默认开启
+  enableFriendCheck: props.account.config?.enableFriendCheck !== false,
+  enableSteal: props.account.config?.enableSteal !== false,
+  // 帮助功能默认开启
+  enableHelpWater: props.account.config?.enableHelpWater !== false,
+  enableHelpWeed: props.account.config?.enableHelpWeed !== false,
+  enableHelpBug: props.account.config?.enableHelpBug !== false,
+  // 无经验不帮助（默认开启）
+  helpOnlyWithExp: props.account.config?.helpOnlyWithExp !== false,
+  // 捣乱功能默认关闭
+  enablePutBug: props.account.config?.enablePutBug === true,
+  enablePutWeed: props.account.config?.enablePutWeed === true,
+  // 智能推荐种植（默认开启）
+  enableSmartPlant: props.account.config?.enableSmartPlant !== false,
+  // 跳过白萝卜（默认关闭）
+  skipWhiteRadish: props.account.config?.skipWhiteRadish === true,
+  // 跳过的作物列表（默认空数组）
+  skipCrops: props.account.config?.skipCrops || [],
+  // 土地管理（默认关闭）
+  autoUnlockLand: props.account.config?.autoUnlockLand === true,
+  autoUpgradeLand: props.account.config?.autoUpgradeLand === true,
+  // 奖励自动领取（默认开启）
+  autoClaimEmail: props.account.config?.autoClaimEmail !== false,
+  autoClaimIllustrated: props.account.config?.autoClaimIllustrated !== false,
+  autoClaimFreeGifts: props.account.config?.autoClaimFreeGifts !== false,
+  // 肥料自动补充（默认关闭）
+  autoRefillNormalFertilizer: props.account.config?.autoRefillNormalFertilizer === true,
+  autoRefillOrganicFertilizer: props.account.config?.autoRefillOrganicFertilizer === true,
+  fertilizerRefillThreshold: props.account.config?.fertilizerRefillThreshold || 100,
+  // 白名单（默认空数组）
+  stealWhitelist: props.account.config?.stealWhitelist || [],
+  helpWaterWhitelist: props.account.config?.helpWaterWhitelist || [],
+  helpWeedWhitelist: props.account.config?.helpWeedWhitelist || [],
+  helpBugWhitelist: props.account.config?.helpBugWhitelist || [],
+  putBugWhitelist: props.account.config?.putBugWhitelist || [],
+  putWeedWhitelist: props.account.config?.putWeedWhitelist || [],
+  // 随机时间好友巡查（默认关闭）
+  enableRandomFriendInterval: props.account.config?.enableRandomFriendInterval === true,
+  // 防偷菜功能（默认关闭）
+  enableAntiSteal: props.account.config?.enableAntiSteal === true,
+  antiStealAdvanceTime: props.account.config?.antiStealAdvanceTime || 30,
+});
+
+// 白名单输入框绑定值
+const stealWhitelistInput = ref((props.account.config?.stealWhitelist || []).join(', '));
+const helpWaterWhitelistInput = ref((props.account.config?.helpWaterWhitelist || []).join(', '));
+const helpWeedWhitelistInput = ref((props.account.config?.helpWeedWhitelist || []).join(', '));
+const helpBugWhitelistInput = ref((props.account.config?.helpBugWhitelist || []).join(', '));
+const putBugWhitelistInput = ref((props.account.config?.putBugWhitelist || []).join(', '));
+const putWeedWhitelistInput = ref((props.account.config?.putWeedWhitelist || []).join(', '));
+
+// 更新白名单
+function updateStealWhitelist() {
+  localConfig.value.stealWhitelist = parseWhitelist(stealWhitelistInput.value);
+}
+function updateHelpWaterWhitelist() {
+  localConfig.value.helpWaterWhitelist = parseWhitelist(helpWaterWhitelistInput.value);
+}
+function updateHelpWeedWhitelist() {
+  localConfig.value.helpWeedWhitelist = parseWhitelist(helpWeedWhitelistInput.value);
+}
+function updateHelpBugWhitelist() {
+  localConfig.value.helpBugWhitelist = parseWhitelist(helpBugWhitelistInput.value);
+}
+function updatePutBugWhitelist() {
+  localConfig.value.putBugWhitelist = parseWhitelist(putBugWhitelistInput.value);
+}
+function updatePutWeedWhitelist() {
+  localConfig.value.putWeedWhitelist = parseWhitelist(putWeedWhitelistInput.value);
+}
+
+// 解析白名单输入字符串为数字数组
+function parseWhitelist(input: string): number[] {
+  if (!input.trim()) return [];
+  return input.split(/[,，]/)
+    .map(s => parseInt(s.trim()))
+    .filter(n => !isNaN(n) && n > 0);
+}
+
+// 白萝卜的作物ID
+const WHITE_RADISH_IDS = [1020002, 2020002];
+
+// 监听 skipWhiteRadish 变化，同步到 skipCrops
+watch(() => localConfig.value.skipWhiteRadish, (newValue) => {
+  if (!localConfig.value.skipCrops) {
+    localConfig.value.skipCrops = [];
+  }
+  if (newValue) {
+    // 开启时，添加白萝卜到 skipCrops
+    WHITE_RADISH_IDS.forEach(id => {
+      if (!localConfig.value.skipCrops!.includes(id)) {
+        localConfig.value.skipCrops!.push(id);
+      }
+    });
+  } else {
+    // 关闭时，从 skipCrops 移除白萝卜
+    localConfig.value.skipCrops = localConfig.value.skipCrops.filter(
+      id => !WHITE_RADISH_IDS.includes(id)
+    );
+  }
+});
+
+// 监听 skipCrops 变化，同步到 skipWhiteRadish
+watch(() => localConfig.value.skipCrops, (newValue) => {
+  const hasWhiteRadish = WHITE_RADISH_IDS.some(id => newValue?.includes(id));
+  if (hasWhiteRadish !== localConfig.value.skipWhiteRadish) {
+    localConfig.value.skipWhiteRadish = hasWhiteRadish;
+  }
+}, { deep: true });
+
+const localEmail = ref(props.account.email || '');
+const localFarmInterval = ref(props.account.farmInterval || 10);
+const localFriendInterval = ref(props.account.friendInterval || 10);
+
+// 手动售卖状态
+const sellingFruits = ref(false);
+
+// 选择模式状态
+const selectMode = ref(false);
+const selectedFruits = ref<Set<number>>(new Set()); // 使用uid来选择
+
+// 是否全选
+const isAllSelected = computed(() => {
+  return fruitItems.value.length > 0 && selectedFruits.value.size === fruitItems.value.length;
+});
+
+// 切换选择模式
+function cancelSelect() {
+  selectMode.value = false;
+  selectedFruits.value.clear();
+}
+
+// 切换单个果实选择（按uid选择，可以区分相同id的不同条目）
+function toggleSelect(item: any) {
+  const uid = item.uid || item.id; // 如果没有uid，使用id作为后备
+  if (selectedFruits.value.has(uid)) {
+    selectedFruits.value.delete(uid);
+  } else {
+    selectedFruits.value.add(uid);
+  }
+}
+
+// 全选/取消全选
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedFruits.value.clear();
+  } else {
+    fruitItems.value.forEach(item => {
+      const uid = item.uid || item.id;
+      selectedFruits.value.add(uid);
+    });
+  }
+}
+
+// ============ 手动收获土地 ============
+
+// 收获选择模式状态
+const harvestSelectMode = ref(false);
+const selectedLands = ref<Set<number>>(new Set());
+const harvestingLands = ref(false);
+
+// 切换选择模式
+function cancelHarvestSelect() {
+  harvestSelectMode.value = false;
+  selectedLands.value.clear();
+}
+
+// 切换单个土地选择
+function toggleLandSelect(index: number) {
+  if (selectedLands.value.has(index)) {
+    selectedLands.value.delete(index);
+  } else {
+    selectedLands.value.add(index);
+  }
+}
+
+// 全选/取消全选成熟土地
+function toggleSelectAllMature() {
+  const matureIndices = landData.value
+    .map((land, index) => ({ land, index }))
+    .filter(({ land }) => isLandMature(land))
+    .map(({ index }) => index);
+  
+  if (isAllMatureSelected.value) {
+    // 取消全选
+    matureIndices.forEach(index => selectedLands.value.delete(index));
+  } else {
+    // 全选
+    matureIndices.forEach(index => selectedLands.value.add(index));
+  }
+}
+
+// 收获选中的土地
+async function handleHarvestSelected() {
+  if (harvestingLands.value || selectedLands.value.size === 0) return;
+
+  harvestingLands.value = true;
+  try {
+    // 将选中的索引转换为土地ID（索引+1）
+    const landIds = Array.from(selectedLands.value).map(index => index + 1);
+
+    const response = await axios.post(`${API_BASE_URL}/accounts/${props.account.id}/harvest-lands`, {
+      landIds: landIds
+    });
+
+    if (response.data.success) {
+      alert(`成功收获 ${selectedLands.value.size} 块土地！`);
+      selectedLands.value.clear();
+      harvestSelectMode.value = false;
+    } else {
+      alert(response.data.message || '收获失败');
+    }
+  } catch (error: any) {
+    alert(error.response?.data?.message || '收获失败，请检查账号是否正在运行');
+  } finally {
+    harvestingLands.value = false;
+  }
+}
+
+// ============ 手动种植土地 ============
+
+// 种植选择模式状态
+const plantSelectMode = ref(false);
+const selectedLandsForPlant = ref<Set<number>>(new Set());
+const plantingLands = ref(false);
+const selectedSeedId = ref<number | ''>('');
+
+// 空闲土地数量
+const emptyLandsCount = computed(() => {
+  return landData.value.filter(land => land.status === '空闲').length;
+});
+
+// 是否全选空闲土地
+const isAllEmptySelected = computed(() => {
+  const emptyIndices = landData.value
+    .map((land, index) => ({ land, index }))
+    .filter(({ land }) => land.status === '空闲')
+    .map(({ index }) => index);
+  return emptyIndices.length > 0 && emptyIndices.every(index => selectedLandsForPlant.value.has(index));
+});
+
+// 取消种植选择模式
+function cancelPlantSelect() {
+  plantSelectMode.value = false;
+  selectedLandsForPlant.value.clear();
+  selectedSeedId.value = '';
+}
+
+// 切换单个土地选择（种植模式）
+function toggleLandSelectForPlant(index: number) {
+  if (selectedLandsForPlant.value.has(index)) {
+    selectedLandsForPlant.value.delete(index);
+  } else {
+    selectedLandsForPlant.value.add(index);
+  }
+}
+
+// 全选/取消全选空闲土地
+function toggleSelectAllEmpty() {
+  const emptyIndices = landData.value
+    .map((land, index) => ({ land, index }))
+    .filter(({ land }) => land.status === '空闲')
+    .map(({ index }) => index);
+
+  if (isAllEmptySelected.value) {
+    // 取消全选
+    emptyIndices.forEach(index => selectedLandsForPlant.value.delete(index));
+  } else {
+    // 全选
+    emptyIndices.forEach(index => selectedLandsForPlant.value.add(index));
+  }
+}
+
+// 处理土地点击事件
+function handleLandClick(index: number, land: any) {
+  if (harvestSelectMode.value && isLandMature(land)) {
+    toggleLandSelect(index);
+  } else if (plantSelectMode.value && land.status === '空闲') {
+    toggleLandSelectForPlant(index);
+  }
+}
+
+// 种植选中的土地
+async function handlePlantSelected() {
+  if (plantingLands.value || selectedLandsForPlant.value.size === 0 || !selectedSeedId.value) return;
+
+  plantingLands.value = true;
+  try {
+    // 将选中的索引转换为土地ID（索引+1）
+    const landIds = Array.from(selectedLandsForPlant.value).map(index => index + 1);
+
+    const response = await axios.post(`${API_BASE_URL}/accounts/${props.account.id}/plant-lands`, {
+      landIds: landIds,
+      seedId: selectedSeedId.value
+    });
+
+    if (response.data.success) {
+      alert(`成功种植 ${response.data.landCount} 块 ${response.data.seedName}！`);
+      selectedLandsForPlant.value.clear();
+      selectedSeedId.value = '';
+      plantSelectMode.value = false;
+    } else {
+      alert(response.data.message || '种植失败');
+    }
+  } catch (error: any) {
+    alert(error.response?.data?.message || '种植失败，请检查账号是否正在运行');
+  } finally {
+    plantingLands.value = false;
+  }
+}
+
+// 监听账号变化，更新本地状态（仅在切换账号时）
+watch(() => props.account.id, (newId, oldId) => {
+  if (newId !== oldId) {
+    // 重新应用默认值，确保新属性有正确的初始值
+    localConfig.value = {
+      ...props.account.config,
+      // 自动售卖果实（默认关闭）
+      autoSell: props.account.config?.autoSell === true,
+      // 好友功能默认开启
+      enableFriendCheck: props.account.config?.enableFriendCheck !== false,
+      enableSteal: props.account.config?.enableSteal !== false,
+      // 帮助功能默认开启
+      enableHelpWater: props.account.config?.enableHelpWater !== false,
+      enableHelpWeed: props.account.config?.enableHelpWeed !== false,
+      enableHelpBug: props.account.config?.enableHelpBug !== false,
+      // 无经验不帮助（默认开启）
+      helpOnlyWithExp: props.account.config?.helpOnlyWithExp !== false,
+      // 捣乱功能默认关闭
+      enablePutBug: props.account.config?.enablePutBug === true,
+      enablePutWeed: props.account.config?.enablePutWeed === true,
+      // 智能推荐种植（默认开启）
+      enableSmartPlant: props.account.config?.enableSmartPlant !== false,
+      // 跳过白萝卜（默认关闭）
+      skipWhiteRadish: props.account.config?.skipWhiteRadish === true,
+      // 跳过的作物列表（默认空数组）
+      skipCrops: props.account.config?.skipCrops || [],
+      // 土地管理（默认关闭）
+      autoUnlockLand: props.account.config?.autoUnlockLand === true,
+      autoUpgradeLand: props.account.config?.autoUpgradeLand === true,
+      // 奖励自动领取（默认开启）
+      autoClaimEmail: props.account.config?.autoClaimEmail !== false,
+      autoClaimIllustrated: props.account.config?.autoClaimIllustrated !== false,
+      autoClaimFreeGifts: props.account.config?.autoClaimFreeGifts !== false,
+      // 肥料补充（默认关闭）
+      autoRefillNormalFertilizer: props.account.config?.autoRefillNormalFertilizer === true,
+      autoRefillOrganicFertilizer: props.account.config?.autoRefillOrganicFertilizer === true,
+      fertilizerRefillThreshold: props.account.config?.fertilizerRefillThreshold || 100,
+      // 白名单（默认空数组）
+      stealWhitelist: props.account.config?.stealWhitelist || [],
+      helpWaterWhitelist: props.account.config?.helpWaterWhitelist || [],
+      helpWeedWhitelist: props.account.config?.helpWeedWhitelist || [],
+      helpBugWhitelist: props.account.config?.helpBugWhitelist || [],
+      putBugWhitelist: props.account.config?.putBugWhitelist || [],
+      putWeedWhitelist: props.account.config?.putWeedWhitelist || [],
+      // 随机时间好友巡查（默认关闭）
+      enableRandomFriendInterval: props.account.config?.enableRandomFriendInterval === true,
+      // 防偷菜功能（默认关闭）
+      enableAntiSteal: props.account.config?.enableAntiSteal === true,
+      antiStealAdvanceTime: props.account.config?.antiStealAdvanceTime || 30,
+    } as AccountConfig;
+    localEmail.value = props.account.email || '';
+    localFarmInterval.value = props.account.farmInterval || 10;
+    localFriendInterval.value = props.account.friendInterval || 10;
+  }
+}, { immediate: true });
+
+// 组件挂载时加载植物列表
+onMounted(() => {
+  loadPlants();
+});
+
+// 监听账号经验值变化，重新加载植物列表（等级可能变化）
+watch(() => props.account.stats.exp, () => {
+  loadPlants();
+});
+
+// ============ 跳过作物选择 ============
+
+// 是否显示作物选择弹窗
+const showCropSelector = ref(false);
+
+// 作物搜索关键词
+const cropSearchQuery = ref('');
+
+// 作物列表（从Plant.json加载）
+const availableCrops = ref<Array<{id: number; name: string; level: number}>>([]);
+
+// 加载作物列表
+async function loadCrops() {
+  try {
+    const response = await fetch('/gameConfig/Plant.json');
+    const plants = await response.json();
+    // 过滤出普通作物（非变异），按等级排序
+    const crops = plants
+      .filter((p: any) => p.id >= 1000000 && p.id < 2000000) // 只取普通作物
+      .map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        level: p.land_level_need || 1
+      }))
+      .sort((a: any, b: any) => a.level - b.level);
+    availableCrops.value = crops;
+  } catch (error) {
+    console.error('加载作物列表失败:', error);
+    // 使用默认作物列表
+    availableCrops.value = [
+      { id: 1020002, name: '白萝卜', level: 1 },
+      { id: 1020003, name: '胡萝卜', level: 1 },
+      { id: 1020059, name: '大白菜', level: 1 },
+      { id: 1020065, name: '大蒜', level: 1 },
+      { id: 1020064, name: '大葱', level: 1 },
+      { id: 1020060, name: '水稻', level: 1 },
+      { id: 1020061, name: '小麦', level: 1 },
+      { id: 1020004, name: '玉米', level: 1 },
+      { id: 1020066, name: '鲜姜', level: 1 },
+      { id: 1020005, name: '土豆', level: 1 },
+    ];
+  }
+}
+
+// 过滤后的作物列表
+const filteredCrops = computed(() => {
+  if (!cropSearchQuery.value) return availableCrops.value;
+  const query = cropSearchQuery.value.toLowerCase();
+  return availableCrops.value.filter(crop =>
+    crop.name.toLowerCase().includes(query)
+  );
+});
+
+// 根据ID获取作物名称
+function getCropNameById(id: number): string {
+  const crop = availableCrops.value.find(c => c.id === id);
+  return crop?.name || `作物#${id}`;
+}
+
+// 切换作物选择
+function toggleCropSelection(cropId: number) {
+  if (!localConfig.value.skipCrops) {
+    localConfig.value.skipCrops = [];
+  }
+  const index = localConfig.value.skipCrops.indexOf(cropId);
+  if (index === -1) {
+    // 添加
+    localConfig.value.skipCrops.push(cropId);
+  } else {
+    // 移除
+    localConfig.value.skipCrops.splice(index, 1);
+  }
+}
+
+// 移除跳过的作物
+function removeSkipCrop(cropId: number) {
+  if (!localConfig.value.skipCrops) {
+    localConfig.value.skipCrops = [];
+    return;
+  }
+  const index = localConfig.value.skipCrops.indexOf(cropId);
+  if (index !== -1) {
+    localConfig.value.skipCrops.splice(index, 1);
+  }
+}
+
+// 组件挂载时加载作物列表
+onMounted(() => {
+  loadCrops();
+});
+
+// 好友列表
+// @ts-ignore - 保留供将来使用
+const friendsList = computed(() => props.account.friends || []);
+
+// 展开的好友ID
+const expandedFriendId = ref<number | null>(null);
+
+// 是否正在获取好友列表
+const isFetchingFriends = ref(false);
+
+// 切换好友展开状态
+// @ts-ignore - 保留供将来使用
+function toggleFriendExpand(gid: number) {
+  if (expandedFriendId.value === gid) {
+    expandedFriendId.value = null;
+  } else {
+    expandedFriendId.value = gid;
+  }
+}
+
+// 获取好友列表
+// @ts-ignore - 保留供将来使用
+async function fetchFriends() {
+  if (isFetchingFriends.value) return;
+
+  isFetchingFriends.value = true;
+  try {
+    const response = await fetch(`/api/accounts/${props.account.id}/fetch-friends`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      throw new Error('获取好友列表失败');
+    }
+
+    // 触发父组件刷新账号数据
+    emit('refresh-data');
+  } catch (error: any) {
+    alert('获取好友列表失败: ' + error.message);
+  } finally {
+    isFetchingFriends.value = false;
+  }
+}
+
+// 背包列表（按分类和ID排序）
+const bagList = computed(() => {
+  const items = props.account.stats?.bag || [];
+  return [...items].sort((a, b) => {
+    const categoryA = getItemCategory(Number(a.id));
+    const categoryB = getItemCategory(Number(b.id));
+    const orderDiff = getCategoryOrder(categoryA) - getCategoryOrder(categoryB);
+    if (orderDiff !== 0) return orderDiff;
+    return Number(a.id) - Number(b.id);
+  });
+});
+
+// 特殊物品（化肥、狗粮等）
+const specialItems = computed(() => {
+  return bagList.value.filter(item => getItemCategory(Number(item.id)) === 'special');
+});
+
+// 作物果实
+const fruitItems = computed(() => {
+  return bagList.value.filter(item => getItemCategory(Number(item.id)) === 'fruit');
+});
+
+// 其他物品
+const otherItems = computed(() => {
+  return bagList.value.filter(item => getItemCategory(Number(item.id)) === 'other');
+});
+
+// 果实数量
+const fruitCount = computed(() => {
+  return bagList.value
+    .filter(item => getItemCategory(Number(item.id)) === 'fruit')
+    .reduce((sum, item) => sum + (item.count || 0), 0);
+});
+
+// 物品总数量
+const totalItemCount = computed(() => {
+  return bagList.value.reduce((sum, item) => sum + (item.count || 0), 0);
+});
+
+// 物品名称和图标函数已从 itemService 导入
+
+// 设置种子偏好
+function onSetSeedPreference(plantName: string) {
+  // 检查是否开启了智能推荐
+  if (localConfig.value.enableSmartPlant) {
+    alert('请先关闭「智能推荐种植」开关，才能手动选择作物');
+    return;
+  }
+  
+  // 更新本地配置
+  localConfig.value.seedType = plantName;
+  // 自动保存配置
+  emit('save-config', {
+    config: localConfig.value,
+    farmInterval: localFarmInterval.value,
+    friendInterval: localFriendInterval.value,
+    email: localEmail.value
+  });
+  // 提示用户
+  alert(`已将「${plantName}」设为偏好作物，配置已自动保存`);
+}
+
+// 启动/停止脚本
+function toggleScript() {
+  emit('toggle-script');
+}
+
+// 保存配置
+function saveConfig() {
+  emit('save-config', {
+    config: localConfig.value,
+    farmInterval: localFarmInterval.value,
+    friendInterval: localFriendInterval.value,
+    email: localEmail.value
+  });
+}
+
+// 测试邮件发送
+const testingEmail = ref(false);
+async function testEmail() {
+  if (!localEmail.value || testingEmail.value) return;
+
+  testingEmail.value = true;
+  try {
+    const response = await axios.post(`${API_BASE_URL}/accounts/${props.account.id}/test-email`, {
+      email: localEmail.value
+    });
+
+    if (response.data.success) {
+      alert('测试邮件已发送，请查收您的邮箱');
+    } else {
+      alert(response.data.message || '邮件发送失败');
+    }
+  } catch (error: any) {
+    alert(error.response?.data?.message || '测试邮件发送失败，请检查网络连接');
+  } finally {
+    testingEmail.value = false;
+  }
+}
+
+// 售卖选中的果实
+async function handleSellSelectedFruits() {
+  if (sellingFruits.value || selectedFruits.value.size === 0) return;
+  
+  // 计算选中的总数量
+  const selectedItems = fruitItems.value.filter(item => selectedFruits.value.has(item.uid || item.id));
+  const totalCount = selectedItems.reduce((sum, item) => sum + (item.count || 0), 0);
+  
+  sellingFruits.value = true;
+  try {
+    const response = await axios.post(`${API_BASE_URL}/accounts/${props.account.id}/sell-fruits`, {
+      uids: Array.from(selectedFruits.value) // 传递uid列表，可以精确选择每个物品条目
+    });
+    
+    if (response.data.success) {
+      alert(`成功售卖 ${totalCount} 个果实！`);
+      selectedFruits.value.clear();
+      selectMode.value = false;
+    } else {
+      alert(response.data.message || '售卖失败');
+    }
+  } catch (error: any) {
+    alert(error.response?.data?.message || '售卖失败，请检查账号是否正在运行');
+  } finally {
+    sellingFruits.value = false;
+  }
+}
+
+// 根据经验值计算当前等级
+function getCurrentLevel(): number {
+  const exp = props.account.stats.exp || 0;
+  // 从最高等级向下查找，找到第一个经验值小于等于当前经验值的等级
+  for (let i = roleLevelData.length - 1; i >= 0; i--) {
+    const levelData = roleLevelData[i];
+    if (levelData && exp >= levelData.exp) {
+      return levelData.level;
+    }
+  }
+  return 1;
+}
+
+// 计算经验进度（当前等级已获得的经验值）
+function getExpProgress(): number {
+  const level = getCurrentLevel();
+  const currentLevelExp = roleLevelData.find(item => item.level === level)?.exp || 0;
+  const expInCurrentLevel = props.account.stats.exp - currentLevelExp;
+  return Math.max(0, expInCurrentLevel);
+}
+
+// 计算升级所需经验（当前等级升到下一级需要的总经验值）
+function getExpNeeded(): number {
+  const level = getCurrentLevel();
+  const currentLevelExp = roleLevelData.find(item => item.level === level)?.exp || 0;
+  const nextLevelExp = roleLevelData.find(item => item.level === level + 1)?.exp || currentLevelExp;
+  return nextLevelExp - currentLevelExp;
+}
+
+// 获取下一级所需的总经验值
+function getNextLevelExp(): number {
+  const level = getCurrentLevel();
+  const nextLevelExp = roleLevelData.find(item => item.level === level + 1)?.exp;
+  return nextLevelExp || props.account.stats.exp;
+}
+
+// 计算经验进度百分比
+function getExpProgressPercent(): number {
+  const needed = getExpNeeded();
+  if (needed === 0) return 100;
+  return Math.min(100, (getExpProgress() / needed) * 100);
+}
+
+// 计算经验/分钟
+function getExpPerMinute(): number {
+  const exp = props.account.stats.sessionStats?.exp || 0;
+  const onlineTime = props.account.stats.sessionStats?.onlineTime || 0;
+  if (onlineTime === 0) return 0;
+  return Math.round((exp / onlineTime) * 10) / 10;
+}
+
+// 计算经验/小时
+function getExpPerHour(): number {
+  const expPerMin = getExpPerMinute();
+  return Math.round(expPerMin * 60);
+}
+
+// 格式化在线时间
+function formatOnlineTime(minutes: number): string {
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes}分钟`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours < 24) {
+    return mins > 0 ? `${hours}小时${mins}分` : `${hours}小时`;
+  }
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  if (remainingHours > 0) {
+    return `${days}天${remainingHours}小时`;
+  }
+  return `${days}天`;
+}
+
+// 格式化预计成熟时间（显示为 HH:mm）
+function formatMatureTime(timestamp: number): string {
+  if (!timestamp || timestamp <= 0) return '';
+  const now = Date.now() / 1000;
+  const diff = timestamp - now;
+
+  if (diff <= 0) return '即将成熟';
+
+  const hours = Math.floor(diff / 3600);
+  const minutes = Math.floor((diff % 3600) / 60);
+
+  if (hours > 0) {
+    return `${hours}小时${minutes > 0 ? minutes + '分' : ''}`;
+  }
+  return `${minutes}分钟后`;
+}
+
+// 计算预计升级时间（分钟）
+function getEstimatedTimeToLevelUp(): string {
+  const expNeeded = getExpNeeded();
+  const expProgress = getExpProgress();
+  const expRemaining = expNeeded - expProgress;
+  const expPerHour = getExpPerHour();
+  
+  if (expPerHour <= 0) return '计算中...';
+  if (expRemaining <= 0) return '即将升级';
+  
+  const hoursNeeded = expRemaining / expPerHour;
+  const totalMinutes = Math.ceil(hoursNeeded * 60);
+  
+  if (totalMinutes < 60) {
+    return `约 ${totalMinutes} 分钟`;
+  } else if (totalMinutes < 1440) {
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    return `约 ${hours} 小时${mins > 0 ? mins + ' 分钟' : ''}`;
+  } else {
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    return `约 ${days} 天${hours > 0 ? hours + ' 小时' : ''}`;
+  }
+}
+
+// 日志自动滚动到底部（仅在开启自动滚动时）
+// 使用浅层监听避免深度遍历的性能开销
+watch(() => props.logs.length, async () => {
+  await nextTick();
+  if (autoScroll.value && logContainer.value) {
+    logContainer.value.scrollTop = logContainer.value.scrollHeight;
+  }
+});
+
+// 手动滚动到底部
+function scrollToBottom() {
+  if (logContainer.value) {
+    logContainer.value.scrollTop = logContainer.value.scrollHeight;
+  }
+}
+
+// 获取操作限制名称
+function getOperationLimitName(name: string): string {
+  const names: Record<string, string> = {
+    weed: '除草',
+    bug: '除虫',
+    water: '浇水',
+    steal: '偷菜',
+    putWeed: '放草',
+    putBug: '放虫',
+    help: '帮助',
+  };
+  return names[name] || name;
+}
+
+// 清空日志
+function clearLogs() {
+  emit('clear-logs');
+}
+
+// ========== 日志筛选功能 ==========
+
+// 模块配置
+const moduleConfig = {
+  farm: { label: '农场', color: '#22c55e', icon: '🌾' },
+  friend: { label: '好友', color: '#3b82f6', icon: '👥' },
+  shop: { label: '商店', color: '#a855f7', icon: '🛒' },
+  warehouse: { label: '仓库', color: '#f59e0b', icon: '📦' },
+  system: { label: '系统', color: '#64748b', icon: '⚙️' },
+  auth: { label: '登录', color: '#10b981', icon: '🔐' },
+  task: { label: '任务', color: '#ec4899', icon: '📋' },
+  other: { label: '其他', color: '#6b7280', icon: '📝' }
+};
+
+// 级别配置
+const levelConfig = {
+  debug: { label: '调试', color: '#6b7280' },
+  info: { label: '信息', color: '#3b82f6' },
+  success: { label: '成功', color: '#22c55e' },
+  warning: { label: '警告', color: '#f59e0b' },
+  error: { label: '错误', color: '#ef4444' }
+};
+
+// 日志筛选状态
+const logFilter = ref({
+  module: '',
+  level: '',
+  keyword: ''
+});
+
+// 获取模块颜色
+function getModuleColor(module: string): string {
+  return moduleConfig[module as keyof typeof moduleConfig]?.color || '#6b7280';
+}
+
+// 获取模块图标
+function getModuleIcon(module: string): string {
+  return moduleConfig[module as keyof typeof moduleConfig]?.icon || '📝';
+}
+
+// 获取模块标签
+function getModuleLabel(module: string): string {
+  return moduleConfig[module as keyof typeof moduleConfig]?.label || '其他';
+}
+
+// 获取级别颜色
+function getLevelColor(level: string): string {
+  return levelConfig[level as keyof typeof levelConfig]?.color || '#3b82f6';
+}
+
+// 获取级别标签
+function getLevelLabel(level: string): string {
+  return levelConfig[level as keyof typeof levelConfig]?.label || '信息';
+}
+
+// 解析日志条目（兼容新旧格式）
+function parseLog(log: any): any {
+  // 如果已经是结构化数据
+  if (typeof log === 'object' && log !== null && log.module) {
+    return log;
+  }
+  // 如果是字符串，尝试解析
+  if (typeof log === 'string') {
+    // 匹配时间戳和消息内容: [20:27:56] [农场] 除虫1
+    const match = log.match(/^\[(\d{2}:\d{2}:\d{2})\]\s*(.*)$/);
+    if (match) {
+      const time = match[1];
+      let message = match[2] || '';
+      let module = 'other';
+      let level = 'info';
+      
+      // 提取方括号中的模块标记，如 [农场]、[好友]、[商店]等
+      const moduleMatch = message.match(/^\[(.+?)\]\s*(.*)$/);
+      if (moduleMatch) {
+        const moduleTag = moduleMatch[1];
+        message = moduleMatch[2] || '';
+        
+        // 根据方括号内的标记识别模块
+        switch (moduleTag) {
+          case '农场':
+            module = 'farm';
+            break;
+          case '好友':
+            module = 'friend';
+            break;
+          case '商店':
+            module = 'shop';
+            break;
+          case '仓库':
+            module = 'warehouse';
+            break;
+          case '系统':
+            module = 'system';
+            break;
+          case '登录':
+          case '认证':
+            module = 'auth';
+            break;
+          case '任务':
+            module = 'task';
+            break;
+          case '错误':
+            module = 'other';
+            level = 'error';
+            break;
+          case '警告':
+            module = 'other';
+            level = 'warning';
+            break;
+          case '成功':
+            module = 'other';
+            level = 'success';
+            break;
+          default:
+            // 如果方括号内不是已知模块，保留原消息
+            message = `[${moduleTag}] ${message}`;
+        }
+      }
+      
+      // 根据消息内容关键词进一步识别模块（如果还没识别出来）
+      if (module === 'other') {
+        const lowerMsg = (message || '').toLowerCase();
+        if (lowerMsg.includes('农场') || lowerMsg.includes('种植') || lowerMsg.includes('收获') || lowerMsg.includes('浇水') || lowerMsg.includes('除草') || lowerMsg.includes('除虫')) {
+          module = 'farm';
+        } else if (lowerMsg.includes('好友') || lowerMsg.includes('偷菜') || lowerMsg.includes('访问')) {
+          module = 'friend';
+        } else if (lowerMsg.includes('商店') || lowerMsg.includes('购买') || lowerMsg.includes('出售')) {
+          module = 'shop';
+        } else if (lowerMsg.includes('仓库')) {
+          module = 'warehouse';
+        } else if (lowerMsg.includes('登录') || lowerMsg.includes('认证') || lowerMsg.includes('扫码')) {
+          module = 'auth';
+        } else if (lowerMsg.includes('任务')) {
+          module = 'task';
+        } else if (lowerMsg.includes('系统') || lowerMsg.includes('启动') || lowerMsg.includes('停止')) {
+          module = 'system';
+        }
+      }
+      
+      // 根据消息内容识别级别
+      const lowerMsg = (message || '').toLowerCase();
+      
+      // 首先检查是否为进行中/等待状态（这些应该是info级别）
+      const isInProgress = 
+        lowerMsg.includes('等待') ||
+        lowerMsg.includes('正在') ||
+        lowerMsg.includes('准备') ||
+        lowerMsg.includes('检查中') ||
+        lowerMsg.includes('处理中') ||
+        lowerMsg.includes('进行中');
+      
+      if (!isInProgress) {
+        if (lowerMsg.includes('错误') || lowerMsg.includes('失败') || lowerMsg.includes('异常') || lowerMsg.includes('无法') || lowerMsg.includes('不能')) {
+          level = 'error';
+        } else if (lowerMsg.includes('警告') || lowerMsg.includes('注意') || lowerMsg.includes('提醒')) {
+          level = 'warning';
+        } else if (
+          lowerMsg.includes('成功') || 
+          lowerMsg.includes('完成') ||
+          lowerMsg.includes('获得') ||
+          lowerMsg.includes('收获') ||
+          lowerMsg.includes('出售') ||
+          lowerMsg.includes('购买成功') ||
+          lowerMsg.includes('已领取') ||
+          lowerMsg.includes('已保存') ||
+          lowerMsg.includes('已更新') ||
+          lowerMsg.includes('已执行') ||
+          lowerMsg.includes('已收获') ||
+          lowerMsg.includes('已除虫') ||
+          lowerMsg.includes('已除草') ||
+          lowerMsg.includes('已浇水') ||
+          lowerMsg.includes('已偷取') ||
+          lowerMsg.includes('已帮助') ||
+          lowerMsg.includes('种植成功') ||
+          lowerMsg.includes('收获成功') ||
+          lowerMsg.includes('购买成功') ||
+          lowerMsg.includes('出售成功')
+        ) {
+          level = 'success';
+        }
+      }
+      
+      return {
+        time,
+        message,
+        module,
+        level
+      };
+    }
+    return { message: log, module: 'other', level: 'info' };
+  }
+  return { message: String(log), module: 'other', level: 'info' };
+}
+
+// 判断是否为可合并的"进行中"日志
+function isMergeableLog(log: any): boolean {
+  if (log.level !== 'info') return false;
+  const msg = (log.message || '').toLowerCase();
+  return msg.includes('开始') ||
+         msg.includes('正在') ||
+         msg.includes('准备') ||
+         msg.includes('检查') ||
+         msg.includes('获取') ||
+         msg.includes('发送') ||
+         msg.includes('收到') ||
+         msg.includes('解析') ||
+         msg.includes('发现') ||
+         msg.includes('没有') ||
+         msg.includes('共有');
+}
+
+// 提取好友巡查的关键信息
+function extractFriendCheckSummary(logs: any[]): string | null {
+  let friendCount = 0;
+  let interactiveCount = 0;
+  let hasStart = false;
+  let hasComplete = false;
+
+  for (const log of logs) {
+    const msg = log.message || '';
+    if (msg.includes('开始巡查')) hasStart = true;
+    if (msg.includes('巡查完成')) hasComplete = true;
+    const match = msg.match(/共有\s*(\d+)\s*个好友/);
+    if (match) friendCount = parseInt(match[1]);
+    const match2 = msg.match(/发现\s*(\d+)\s*个有互动项的好友/);
+    if (match2) interactiveCount = parseInt(match2[1]);
+  }
+
+  if (hasStart && hasComplete) {
+    return `好友巡查完成: 共${friendCount}个好友, ${interactiveCount}个可互动`;
+  }
+  return null;
+}
+
+// 过滤后的日志列表
+const filteredLogs = computed(() => {
+  let result = props.logs.map((log, index) => ({
+    ...parseLog(log),
+    id: `${index}_${log.toString().slice(0, 50)}`
+  }));
+
+  // 按模块筛选
+  if (logFilter.value.module) {
+    result = result.filter(log => log.module === logFilter.value.module);
+  }
+
+  // 按级别筛选
+  if (logFilter.value.level) {
+    result = result.filter(log => log.level === logFilter.value.level);
+  }
+
+  // 按关键词筛选（空格分词）
+  if (logFilter.value.keyword.trim()) {
+    const keywords = logFilter.value.keyword.trim().toLowerCase().split(/\s+/);
+    result = result.filter(log => {
+      const message = (log.message || '').toLowerCase();
+      return keywords.every(keyword => message.includes(keyword));
+    });
+  }
+
+  // 合并同一秒内、同一模块的连续"进行中"日志 或 完全重复的日志
+  const merged: any[] = [];
+  let currentGroup: any[] = [];
+  let currentGroupKey = '';
+  let lastLogMessage = '';
+  let duplicateCount = 0;
+
+  for (let i = 0; i < result.length; i++) {
+    const log = result[i];
+    const groupKey = `${log.time}_${log.module}`;
+    const logMessage = log.message || '';
+
+    // 检查是否为完全重复的日志（同一秒、同一模块、同一消息）
+    const isDuplicate = groupKey === currentGroupKey && logMessage === lastLogMessage;
+
+    if ((isMergeableLog(log) || isDuplicate) && groupKey === currentGroupKey) {
+      // 继续当前组
+      currentGroup.push(log);
+      if (isDuplicate) {
+        duplicateCount++;
+      }
+    } else {
+      // 结束当前组，尝试提取摘要
+      if (currentGroup.length >= 3 || duplicateCount >= 2) {
+        // 尝试提取好友巡查摘要
+        const summary = extractFriendCheckSummary(currentGroup);
+        if (summary) {
+          // 保留第一条和最后一条，中间替换为摘要
+          merged.push(currentGroup[0]);
+          merged.push({
+            ...currentGroup[0],
+            message: `  ↳ ${summary}`,
+            level: 'success'
+          });
+          merged.push(currentGroup[currentGroup.length - 1]);
+        } else if (duplicateCount >= 2) {
+          // 重复日志，只保留一条并标记次数
+          merged.push({
+            ...currentGroup[0],
+            message: `${logMessage} (重复 ${currentGroup.length} 次)`,
+            level: 'warning'
+          });
+        } else {
+          // 其他情况，保留第一条和最后一条
+          merged.push(currentGroup[0]);
+          if (currentGroup.length > 1) {
+            merged.push({
+              ...currentGroup[0],
+              message: `  ↳ ...${currentGroup.length - 2} 个步骤`,
+              level: 'info'
+            });
+            merged.push(currentGroup[currentGroup.length - 1]);
+          }
+        }
+      } else if (currentGroup.length > 0) {
+        // 组太小，直接添加
+        merged.push(...currentGroup);
+      }
+
+      // 开始新组
+      if (isMergeableLog(log)) {
+        currentGroup = [log];
+        currentGroupKey = groupKey;
+        lastLogMessage = logMessage;
+        duplicateCount = 0;
+      } else {
+        currentGroup = [];
+        currentGroupKey = '';
+        lastLogMessage = '';
+        duplicateCount = 0;
+        merged.push(log);
+      }
+    }
+  }
+
+  // 处理最后一组
+  if (currentGroup.length >= 3 || duplicateCount >= 2) {
+    const summary = extractFriendCheckSummary(currentGroup);
+    if (summary) {
+      merged.push(currentGroup[0]);
+      merged.push({
+        ...currentGroup[0],
+        message: `  ↳ ${summary}`,
+        level: 'success'
+      });
+      merged.push(currentGroup[currentGroup.length - 1]);
+    } else if (duplicateCount >= 2) {
+      // 重复日志，只保留一条并标记次数
+      merged.push({
+        ...currentGroup[0],
+        message: `${currentGroup[0].message} (重复 ${currentGroup.length} 次)`,
+        level: 'warning'
+      });
+    } else {
+      merged.push(currentGroup[0]);
+      merged.push({
+        ...currentGroup[0],
+        message: `  ↳ ...${currentGroup.length - 2} 个步骤`,
+        level: 'info'
+      });
+      merged.push(currentGroup[currentGroup.length - 1]);
+    }
+  } else if (currentGroup.length > 0) {
+    merged.push(...currentGroup);
+  }
+
+  return merged;
+});
+
+// 生长阶段配置
+const PHASE_CONFIG: Record<number, { name: string; color: string; icon: string }> = {
+  [-1]: { name: '锁定', color: '#9ca3af', icon: '🔒' },
+  [0]: { name: '空闲', color: '#10b981', icon: '🌱' },
+  [1]: { name: '种子', color: '#8b5cf6', icon: '🌰' },
+  [2]: { name: '发芽', color: '#22c55e', icon: '🌿' },
+  [3]: { name: '小叶', color: '#16a34a', icon: '🍃' },
+  [4]: { name: '大叶', color: '#15803d', icon: '🌿' },
+  [5]: { name: '开花', color: '#ec4899', icon: '🌸' },
+  [6]: { name: '成熟', color: '#f59e0b', icon: '🌾' },
+  [7]: { name: '枯死', color: '#6b7280', icon: '🥀' },
+};
+
+// 格式化时间
+function formatTime(seconds: number): string {
+  if (seconds <= 0) return '';
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return `${hours}时${mins}分`;
+  return `${mins}分`;
+}
+
+// 土地数据计算
+const landData = computed(() => {
+  return props.account.stats.landStatus.map((land) => {
+    // 兼容旧版字符串格式
+    if (typeof land === 'string') {
+      const parts = land.split(' ');
+      if (land === '锁定') return { status: '锁定', cropName: '', growthStage: '', phase: -1, phaseConfig: PHASE_CONFIG[-1] };
+      if (land === '空闲') return { status: '空闲', cropName: '', growthStage: '', phase: 0, phaseConfig: PHASE_CONFIG[0] };
+      if (parts.length >= 2) {
+        return {
+          status: '生长中',
+          cropName: parts[0],
+          growthStage: parts[1],
+          phase: -2,
+          phaseConfig: { name: parts[1], color: '#6b7280', icon: '🌱' }
+        };
+      }
+      return { status: land, cropName: '', growthStage: '', phase: -2, phaseConfig: { name: land, color: '#6b7280', icon: '❓' } };
+    }
+    
+    // 新版对象格式
+    const phase = land.phase ?? -2;
+    const phaseConfig = PHASE_CONFIG[phase] || { name: land.phaseName || '未知', color: '#6b7280', icon: '❓' };
+    
+    return {
+      status: land.status,
+      cropName: land.plantName || '',
+      growthStage: land.phaseName || '',
+      phase,
+      phaseConfig,
+      progress: land.progress ?? 0,
+      totalProgress: land.totalProgress ?? 0,
+      nextPhaseTime: land.nextPhaseTime ?? 0,
+      matureTime: land.matureTime ?? 0,
+      landLevel: land.landLevel ?? 0,
+      landMaxLevel: land.landMaxLevel ?? 0,
+      couldUpgrade: land.couldUpgrade ?? false,
+      stealable: land.stealable ?? false,
+      buff: land.buff,
+    };
+  });
+});
+
+// 检查土地是否成熟
+function isLandMature(land: any): boolean {
+  // 检查 status 是否为 '成熟'
+  if (land.status === '成熟') return true;
+  // 检查 phase 是否为 5（成熟阶段），支持字符串和数字
+  const phase = Number(land.phase);
+  if (phase === 5) return true;
+  // 检查 growthStage 是否包含 '成熟'
+  if (land.growthStage && land.growthStage.includes('成熟')) return true;
+  return false;
+}
+
+// 成熟土地数量
+const matureLandsCount = computed(() => {
+  return landData.value.filter(isLandMature).length;
+});
+
+// 是否全选了所有成熟土地
+const isAllMatureSelected = computed(() => {
+  const matureLands = landData.value.filter(isLandMature);
+  return matureLands.length > 0 && matureLands.every((land) => {
+    const landIndex = landData.value.indexOf(land);
+    return selectedLands.value.has(landIndex);
+  });
+});
+
+// 土地等级统计
+const landLevelStats = computed(() => {
+  const stats: Record<number, number> = {};
+  for (const land of landData.value) {
+    const level = land.landLevel || 0;
+    if (level > 0) {
+      stats[level] = (stats[level] || 0) + 1;
+    }
+  }
+  return stats;
+});
+
+// 获取土地等级名称
+function getLandLevelName(level: number): string {
+  const names: Record<number, string> = {
+    1: '普通',
+    2: '红土',
+    3: '黑土',
+    4: '金土',
+  };
+  return names[level] || `Lv${level}`;
+}
+
+// 获取土地等级颜色
+function getLandLevelColor(level: number): string {
+  const colors: Record<number, string> = {
+    1: '#64748b', // 灰色
+    2: '#ef4444', // 红色
+    3: '#1f2937', // 黑色
+    4: '#eab308', // 金色
+  };
+  return colors[level] || '#64748b';
+}
+</script>
+
+<style scoped>
+/* 旋转动画 */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 土地状况头部布局 */
+.land-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.land-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.land-level-stats {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.land-level-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+/* 土地单元格样式 */
+.land-cell {
+  position: relative;
+  border-radius: 12px;
+  padding: 16px 12px;
+  text-align: center;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  min-height: 70px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.land-cell:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.08);
+}
+
+/* 普通土地 - 灰褐色 */
+.land-type-1 {
+  background: linear-gradient(135deg, #f5f5f4 0%, #e7e5e4 100%);
+  border-color: #d6d3d1;
+}
+
+.land-type-1.land-empty {
+  background: linear-gradient(135deg, #fafaf9 0%, #f5f5f4 100%);
+  border-color: #d6d3d1;
+}
+
+.land-type-1.land-growing {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #86efac;
+}
+
+.land-type-1.land-mature {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #fbbf24;
+}
+
+/* 红土地 - 红褐色 */
+.land-type-2 {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-color: #fca5a5;
+}
+
+.land-type-2.land-empty {
+  background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
+  border-color: #f87171;
+}
+
+.land-type-2.land-growing {
+  background: linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%);
+  border-color: #4ade80;
+}
+
+.land-type-2.land-mature {
+  background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%);
+  border-color: #f59e0b;
+}
+
+/* 黑土地 - 深褐色 */
+.land-type-3 {
+  background: linear-gradient(135deg, #78716c 0%, #57534e 100%);
+  border-color: #44403c;
+}
+
+.land-type-3 .land-crop-name,
+.land-type-3 .land-growth-stage,
+.land-type-3 .land-level {
+  color: #f5f5f4;
+}
+
+.land-type-3.land-empty {
+  background: linear-gradient(135deg, #a8a29e 0%, #78716c 100%);
+  border-color: #57534e;
+}
+
+.land-type-3.land-growing {
+  background: linear-gradient(135deg, #57534e 0%, #44403c 100%);
+  border-color: #22c55e;
+}
+
+.land-type-3.land-mature {
+  background: linear-gradient(135deg, #78716c 0%, #a16207 100%);
+  border-color: #eab308;
+}
+
+/* 金土地 - 金黄色 */
+.land-type-4 {
+  background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+  border-color: #fde047;
+  box-shadow: 0 2px 8px rgba(234, 179, 8, 0.2), 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.land-type-4.land-empty {
+  background: linear-gradient(135deg, #fefce8 0%, #fef08a 100%);
+  border-color: #facc15;
+}
+
+.land-type-4.land-growing {
+  background: linear-gradient(135deg, #ecfccb 0%, #d9f99d 100%);
+  border-color: #84cc16;
+}
+
+.land-type-4.land-mature {
+  background: linear-gradient(135deg, #fef3c7 0%, #fbbf24 100%);
+  border-color: #f59e0b;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3), 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.land-locked {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  opacity: 0.7;
+}
+
+.land-withered {
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+}
+
+/* 可偷状态（变异） */
+.land-stealable {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+  animation: stealable-pulse 2s ease-in-out infinite;
+}
+
+@keyframes stealable-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.7);
+  }
+}
+
+.land-stealable-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #ef4444;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  animation: badge-blink 1.5s ease-in-out infinite;
+}
+
+@keyframes badge-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.land-stealable .land-crop-name {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.land-stealable .land-growth-stage {
+  color: #d97706;
+  font-weight: 500;
+}
+
+.land-crop-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #166534;
+  margin-bottom: 4px;
+}
+
+.land-growth-stage {
+  font-size: 11px;
+  color: #22c55e;
+}
+
+.land-locked .land-crop-name,
+.land-locked .land-growth-stage {
+  color: #94a3b8;
+}
+
+.land-empty .land-crop-name,
+.land-empty .land-growth-stage {
+  color: #94a3b8;
+}
+
+.land-mature .land-crop-name {
+  color: #b45309;
+}
+
+.land-mature .land-growth-stage {
+  color: #f59e0b;
+}
+
+.land-withered .land-crop-name {
+  color: #991b1b;
+}
+
+.land-withered .land-growth-stage {
+  color: #dc2626;
+}
+
+/* 土地阶段图标 */
+.land-phase-icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+/* 作物图片容器 */
+.land-crop-image-container {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 作物图片 */
+.land-crop-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* 整体进度条（从种植到成熟） */
+.land-total-progress-bar {
+  width: 100%;
+  height: 14px;
+  background: #e2e8f0;
+  border-radius: 7px;
+  margin-top: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.land-total-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+  border-radius: 7px;
+  transition: width 0.3s ease;
+}
+
+.land-total-progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 9px;
+  font-weight: 600;
+  color: #1e40af;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+}
+
+/* 预计成熟时间 */
+.land-mature-time {
+  font-size: 10px;
+  color: #3b82f6;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* 进度条 */
+.land-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.land-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* 到下一阶段时间 */
+.land-next-phase {
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+/* 土地等级徽章（左上角） */
+.land-level-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 8px;
+  z-index: 5;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.land-level-badge .upgrade-icon {
+  color: #22c55e;
+  margin-left: 2px;
+  font-weight: 800;
+}
+
+.land-level-badge.can-upgrade {
+  animation: pulse-badge 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.3);
+  }
+}
+
+/* 不同土地类型的徽章样式 */
+.land-level-badge-1 {
+  color: #57534e;
+  background: linear-gradient(135deg, #f5f5f4 0%, #e7e5e4 100%);
+  border-color: #d6d3d1;
+}
+
+.land-level-badge-2 {
+  color: #991b1b;
+  background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
+  border-color: #f87171;
+}
+
+.land-level-badge-3 {
+  color: #f5f5f4;
+  background: linear-gradient(135deg, #44403c 0%, #292524 100%);
+  border-color: #1c1917;
+}
+
+.land-level-badge-4 {
+  color: #92400e;
+  background: linear-gradient(135deg, #fef08a 0%, #fde047 100%);
+  border-color: #facc15;
+  box-shadow: 0 1px 4px rgba(234, 179, 8, 0.4);
+}
+
+/* 旧的土地等级样式（底部） */
+.land-level {
+  font-size: 11px;
+  margin-top: 4px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  display: inline-block;
+}
+
+.land-level.can-upgrade {
+  animation: pulse-upgrade 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-upgrade {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+  }
+}
+
+/* 不同土地类型的标签样式 */
+.land-level-1 {
+  color: #57534e;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.land-level-2 {
+  color: #dc2626;
+  background: rgba(254, 242, 242, 0.9);
+}
+
+.land-level-3 {
+  color: #f5f5f4;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.land-level-4 {
+  color: #92400e;
+  background: linear-gradient(135deg, #fef08a 0%, #fde047 100%);
+  box-shadow: 0 1px 3px rgba(234, 179, 8, 0.3);
+}
+
+/* Buff图标 */
+.land-buff {
+  font-size: 10px;
+  margin-top: 4px;
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+}
+
+/* 土地选择样式 */
+.land-cell.land-selected {
+  border: 2px solid #f59e0b !important;
+  background: #fef3c7 !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3);
+}
+
+.land-cell.land-selectable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+/* ========== 日志页面样式 ========== */
+
+/* 日志页面容器 */
+.log-page {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 10px 15px -3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+}
+
+/* 日志头部 */
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.log-title-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.log-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.auto-scroll-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #64748b;
+  transition: color 0.2s;
+}
+
+.auto-scroll-label:hover {
+  color: #1e293b;
+}
+
+.auto-scroll-checkbox {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+}
+
+.log-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.log-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.log-btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.log-btn-primary:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.log-btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.log-btn-danger:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+/* 筛选栏 */
+.log-filters {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.filter-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.filter-row:last-child {
+  margin-bottom: 0;
+}
+
+.filter-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-group-full {
+  flex: 2;
+}
+
+.filter-label {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.filter-select,
+.filter-input {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #1e293b;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.filter-select:focus,
+.filter-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.filter-select option {
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.filter-input::placeholder {
+  color: #94a3b8;
+}
+
+/* 日志容器 */
+.log-container {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px;
+  max-height: 500px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  font-family: 'JetBrains Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+/* 自定义滚动条 */
+.log-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.log-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.log-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.log-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 空状态 */
+.log-empty {
+  color: #64748b;
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.log-empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.4;
+}
+
+.log-empty-text {
+  font-size: 16px;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.log-empty-hint {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+/* 日志列表 */
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 日志条目 */
+.log-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-left: 3px solid transparent;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+  margin-bottom: 6px;
+}
+
+.log-item:hover {
+  background: #f1f5f9;
+  transform: translateX(2px);
+}
+
+/* 不同级别的左边框 */
+.log-item-error {
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.log-item-warning {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.log-item-success {
+  border-left-color: #22c55e;
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.log-item-info {
+  border-left-color: #3b82f6;
+}
+
+.log-item-debug {
+  border-left-color: #94a3b8;
+}
+
+/* 时间戳 */
+.log-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
+  min-width: 70px;
+  padding-top: 2px;
+}
+
+/* 标签容器 */
+.log-badges {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* 标签样式 */
+.log-badge {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-weight: 500;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.log-badge-module {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+}
+
+.log-badge-level {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+
+/* 日志消息 */
+.log-message {
+  color: #334155;
+  flex: 1;
+  word-break: break-all;
+  padding-top: 2px;
+}
+
+/* 日志统计 */
+.log-stats {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.log-stat {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* 旧日志样式（兼容） */
+.log-normal {
+  color: #334155;
+}
+
+.log-error {
+  color: #dc2626;
+}
+
+.log-warning {
+  color: #d97706;
+}
+
+.log-farm {
+  color: #16a34a;
+}
+
+.log-friend {
+  color: #2563eb;
+}
+
+.log-shop {
+  color: #7c3aed;
+}
+
+.log-success {
+  color: #34d399;
+  font-weight: 600;
+}
+
+/* 滑块样式 */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* 移动端响应式样式 */
+
+/* 平板设备 */
+@media (max-width: 1024px) {
+  /* 统计卡片改为2列 */
+  div[style*="grid-template-columns: repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* 土地改为4列 */
+  div[style*="grid-template-columns: repeat(6, 1fr)"] {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+
+  /* 今日统计改为4列 */
+  div[style*="grid-template-columns: repeat(5, 1fr)"] {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+}
+
+/* 手机设备 */
+@media (max-width: 768px) {
+  /* 减小整体内边距 */
+  div[style*="padding: 24px"] {
+    padding: 12px !important;
+  }
+
+  div[style*="max-width: 1200px"] {
+    padding: 12px !important;
+  }
+
+  /* 账号信息头部 - 垂直布局 */
+  div[style*="justify-content: space-between; margin-bottom: 24px"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 16px !important;
+  }
+
+  /* 账号名称和状态 */
+  div[style*="display: flex; align-items: center; gap: 16px"] {
+    width: 100% !important;
+  }
+
+  /* 按钮区域 - 垂直布局 */
+  div[style*="display: flex; align-items: center; gap: 12px;"] {
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+
+  /* 启动/停止按钮和重新登录按钮 */
+  div[style*="display: flex; align-items: center; gap: 12px;"] > button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* 快捷标签隐藏 */
+  div[style*="display: flex; gap: 12px;"] {
+    display: none !important;
+  }
+
+  /* 统计卡片 - 2列布局，保持比例 */
+  div[style*="grid-template-columns: repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  /* 统计卡片内边距 */
+  div[style*="grid-template-columns: repeat(4, 1fr)"] > div {
+    padding: 16px !important;
+    min-height: 100px !important;
+  }
+
+  /* 统计数字字体 */
+  div[style*="font-size: 32px"] {
+    font-size: 22px !important;
+  }
+
+  div[style*="font-size: 28px"] {
+    font-size: 20px !important;
+  }
+
+  /* 土地改为3列 */
+  div[style*="grid-template-columns: repeat(6, 1fr)"] {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* 今日统计 - 4列布局 */
+  div[style*="grid-template-columns: repeat(5, 1fr)"] {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* 今日统计卡片 */
+  div[style*="grid-template-columns: repeat(5, 1fr)"] > div {
+    padding: 12px 8px !important;
+    min-height: 80px !important;
+  }
+
+  /* 今日统计标签 */
+  div[style*="grid-template-columns: repeat(5, 1fr)"] div[style*="font-size: 12px"] {
+    font-size: 11px !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* 今日统计数字 */
+  div[style*="grid-template-columns: repeat(5, 1fr)"] div[style*="font-size: 28px"] {
+    font-size: 18px !important;
+  }
+
+  /* 标签页导航 - 全宽可滚动 */
+  div[style*="width: fit-content"] {
+    width: 100% !important;
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+  }
+
+  div[style*="width: fit-content"] button {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    padding: 8px 16px !important;
+    font-size: 13px !important;
+  }
+}
+
+/* 小屏幕手机 */
+@media (max-width: 480px) {
+  /* 统计卡片改为2列 */
+  div[style*="grid-template-columns: repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* 统计卡片内边距 */
+  div[style*="grid-template-columns: repeat(4, 1fr)"] > div {
+    padding: 12px !important;
+    min-height: 90px !important;
+  }
+
+  /* 统计数字字体 */
+  div[style*="font-size: 32px"] {
+    font-size: 20px !important;
+  }
+
+  /* 土地改为2列 */
+  div[style*="grid-template-columns: repeat(6, 1fr)"],
+  div[style*="grid-template-columns: repeat(4, 1fr)"],
+  div[style*="grid-template-columns: repeat(3, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* 今日统计改为2列 */
+  div[style*="grid-template-columns: repeat(5, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* 今日统计卡片 */
+  div[style*="grid-template-columns: repeat(5, 1fr)"] > div {
+    padding: 10px 6px !important;
+    min-height: 70px !important;
+  }
+
+  /* 今日统计标签 */
+  div[style*="grid-template-columns: repeat(5, 1fr)"] div[style*="font-size: 12px"] {
+    font-size: 10px !important;
+  }
+
+  /* 今日统计数字 */
+  div[style*="grid-template-columns: repeat(5, 1fr)"] div[style*="font-size: 28px"] {
+    font-size: 16px !important;
+  }
+
+  /* 进一步缩小内边距 */
+  div[style*="padding: 24px"],
+  div[style*="padding: 16px"] {
+    padding: 12px !important;
+  }
+
+  /* 缩小土地单元格 */
+  .land-cell {
+    min-height: 50px !important;
+    padding: 8px 4px !important;
+  }
+
+  .land-crop-name {
+    font-size: 11px !important;
+  }
+
+  .land-growth-stage {
+    font-size: 10px !important;
+  }
+
+  /* 头像缩小 */
+  div[style*="width: 56px; height: 56px"] {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 16px !important;
+  }
+
+  /* 账号名称字体 */
+  h2[style*="font-size: 20px"] {
+    font-size: 16px !important;
+  }
+}
+
+/* 好友列表土地网格 - 移动端适配 */
+@media (max-width: 768px) {
+  /* 好友土地改为3列 */
+  div[style*="grid-template-columns: repeat(6, 1fr)"] {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* 好友土地改为2列 */
+  div[style*="grid-template-columns: repeat(6, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 4px !important;
+  }
+
+  /* 好友展开区域减小内边距 */
+  div[style*="padding: 0 16px 16px 48px"] {
+    padding: 0 12px 12px 40px !important;
+  }
+}
+
+/* 土地状况头部 - 移动端适配 */
+@media (max-width: 768px) {
+  .land-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .land-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .land-level-stats {
+    order: -1;
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .land-header {
+    padding: 0;
+  }
+
+  .land-controls {
+    gap: 8px;
+  }
+
+  .land-level-stats {
+    gap: 6px;
+  }
+
+  .land-level-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  /* 按钮样式调整 */
+  .land-controls button,
+  .land-controls select {
+    font-size: 12px !important;
+    padding: 5px 10px !important;
+  }
+}
+
+/* ========== 响应式布局 ========== */
+
+/* 头部区域 */
+.header-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding: 20px 24px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 20px;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+  flex-shrink: 0;
+}
+
+.header-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.header-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.header-status {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+.header-status.status-running {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.header-status.status-stopped {
+  background-color: #f1f5f9;
+  color: #64748b;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* 统计卡片网格 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+/* 响应式适配 */
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .header-section {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px 20px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .header-avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 18px;
+  }
+
+  .header-name {
+    font-size: 18px;
+  }
+
+  .header-actions {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-section {
+    padding: 12px 16px;
+    gap: 12px;
+  }
+
+  .header-left {
+    gap: 12px;
+  }
+
+  .header-avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
+
+  .header-name {
+    font-size: 16px;
+  }
+
+  .header-name-row {
+    gap: 8px;
+  }
+
+  .header-status {
+    font-size: 11px;
+    padding: 3px 10px;
+  }
+
+  .header-actions {
+    gap: 10px;
+  }
+}
+
+/* 背包网格 */
+.bag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .bag-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .bag-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .bag-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+}
+
+@media (max-width: 360px) {
+  .bag-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+}
+</style>
